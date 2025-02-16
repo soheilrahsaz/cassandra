@@ -260,6 +260,7 @@ public abstract class Token implements RingPosition<Token>, Serializable
     abstract public long getHeapSize();
     abstract public Object getTokenValue();
     abstract public int tokenHash();
+    public TokenFactory tokenFactory() { return getPartitioner().getTokenFactory(); }
 
     /**
      * This method exists so that callers can access the primitive {@code long} value for this {@link Token}, if

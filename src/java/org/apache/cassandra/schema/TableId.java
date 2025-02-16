@@ -250,6 +250,11 @@ public final class TableId implements Comparable<TableId>
         return 16;
     }
 
+    public static void skip(DataInputPlus in) throws IOException
+    {
+        in.skipBytesFully(16);
+    }
+
     public static void skipCompact(DataInputPlus in) throws IOException
     {
         long compact = in.readUnsignedVInt();

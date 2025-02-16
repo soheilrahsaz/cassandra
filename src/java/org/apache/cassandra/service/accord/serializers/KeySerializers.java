@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.EnumSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.function.IntFunction;
@@ -58,6 +59,9 @@ import org.apache.cassandra.service.accord.api.AccordRoutableKey.AccordKeySerial
 import org.apache.cassandra.service.accord.api.AccordRoutingKey;
 import org.apache.cassandra.service.accord.api.PartitionKey;
 import org.apache.cassandra.utils.NullableSerializer;
+
+import static accord.utils.ArrayBuffers.cachedAny;
+import static accord.utils.ArrayBuffers.cachedInts;
 
 public class KeySerializers
 {
@@ -120,7 +124,7 @@ public class KeySerializers
     public static class Impl
     {
         final AccordKeySerializer<Key> key;
-        final IVersionedSerializer<RoutingKey> routingKey;
+        final AccordKeySerializer<RoutingKey> routingKey;
 
         final IVersionedSerializer<RoutingKey> nullableRoutingKey;
         final AbstractKeysSerializer<RoutingKey, RoutingKeys> routingKeys;
@@ -153,7 +157,7 @@ public class KeySerializers
 
         @VisibleForTesting
         public Impl(AccordKeySerializer<Key> key,
-                    IVersionedSerializer<RoutingKey> routingKey,
+                    AccordKeySerializer<RoutingKey> routingKey,
                     IVersionedSerializer<Range> range)
         {
             this.key = key;
@@ -518,12 +522,14 @@ public class KeySerializers
         }
     }
 
+    // this serializer is designed to permits using the collection in its serialized form with minimal in-memory state.
+    // it also saves some memory by avoiding duplicating prefixes (which happens to also assist faster lookups)
     public abstract static class AbstractKeysSerializer<K extends RoutableKey, KS extends AbstractKeys<K>> implements IVersionedSerializer<KS>
     {
-        final IVersionedSerializer<K> keySerializer;
+        final AccordKeySerializer<K> keySerializer;
         final IntFunction<K[]> allocate;
 
-        public AbstractKeysSerializer(IVersionedSerializer<K> keySerializer, IntFunction<K[]> allocate)
+        public AbstractKeysSerializer(AccordKeySerializer<K> keySerializer, IntFunction<K[]> allocate)
         {
             this.keySerializer = keySerializer;
             this.allocate = allocate;
@@ -532,9 +538,84 @@ public class KeySerializers
         @Override
         public void serialize(KS keys, DataOutputPlus out, int version) throws IOException
         {
-            out.writeUnsignedVInt32(keys.size());
-            for (int i=0, mi=keys.size(); i<mi; i++)
-                keySerializer.serialize(keys.get(i), out, version);
+            int size = keys.size();
+            if (size == 0)
+            {
+                out.writeUnsignedVInt32(0);
+                return;
+            }
+
+            int prefixCount = 1;
+            Object prefix = keys.get(0).prefix();
+            Object[] prefixes = null;
+            int[] prefixEnds = null;
+            for (int i = 1 ; i < size ; ++i)
+            {
+                Object nextPrefix = keys.get(i).prefix();
+                if (Objects.equals(prefix, nextPrefix))
+                    continue;
+
+                if (prefixes == null)
+                {
+                    prefixes = cachedAny().get(2);
+                    prefixes[0] = prefix;
+                    prefixEnds = cachedInts().getInts(2);
+                    prefixEnds[0] = i;
+                }
+                else
+                {
+                    if (prefixes.length == prefixCount)
+                        prefixes = cachedAny().resize(prefixes, prefixCount, prefixCount * 2);
+                    if (prefixEnds.length == prefixCount)
+                        prefixEnds = cachedInts().resize(prefixEnds, prefixCount, prefixCount * 2);
+                    ++prefixCount;
+                }
+            }
+
+            out.writeUnsignedVInt32(prefixCount);
+            if (prefixCount == 1)
+            {
+                out.writeUnsignedVInt32(size);
+                if (!keySerializer.keysWithSamePrefixAreFixedLength(keys.get(0)))
+                    serializeKeyWithoutPrefixOffsets(keys, 0, size, out, version);
+                serializeKeysWithoutPrefix(keys, 0, size, out, version);
+            }
+            else
+            {
+                for (int i = 0; i < prefixCount; ++i)
+                {
+                    out.writeUnsignedVInt32(prefixEnds[i]);
+                }
+                for (int i = 0; i < prefixCount; ++i)
+                {
+                    keySerializer.serializePrefix(prefixes[i], out, version);
+                }
+                int prefixStart = 0;
+                for (int i = 0 ; i < prefixCount ; ++i)
+                {
+                    int prefixEnd = prefixEnds[i];
+                    if (!keySerializer.keysWithSamePrefixAreFixedLength(keys.get(prefixStart)))
+                        serializeKeyWithoutPrefixOffsets(keys, prefixStart, prefixEnd, out, version);
+                    serializeKeysWithoutPrefix(keys, prefixStart, prefixEnd, out, version);
+                    prefixStart = prefixEnd;
+                }
+            }
+        }
+
+        private void serializeKeysWithoutPrefix(KS keys, int start, int end, DataOutputPlus out, int version) throws IOException
+        {
+            for (int i = start; i < end; ++i)
+                keySerializer.serializeWithoutPrefixOrLength(keys.get(i), out, version);
+        }
+
+        private void serializeKeyWithoutPrefixOffsets(KS keys, int start, int end, DataOutputPlus out, int version) throws IOException
+        {
+            int endOffset = 0;
+            for (int i = start; i < end; ++i)
+            {
+                endOffset += keySerializer.lengthWithoutPrefix(keys.get(i));
+                out.writeInt(endOffset);
+            }
         }
 
         abstract KS deserialize(DataInputPlus in, int version, K[] keys) throws IOException;

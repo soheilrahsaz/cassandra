@@ -86,9 +86,60 @@ public class BurnTestKeySerializers
         {
             in.skipBytesFully(3 * Integer.BYTES);
         }
+
+        @Override
+        public boolean keysWithSamePrefixAreFixedLength(PrefixedIntHashKey key)
+        {
+            return true;
+        }
+
+        @Override
+        public int lengthWithoutPrefix(PrefixedIntHashKey key)
+        {
+            return 8;
+        }
+
+        @Override
+        public void serializePrefix(Object prefix, DataOutputPlus out, int version) throws IOException
+        {
+            out.writeInt((Integer) prefix);
+        }
+
+        @Override
+        public void serializeWithoutPrefixOrLength(PrefixedIntHashKey key, DataOutputPlus out, int version) throws IOException
+        {
+            out.writeInt(key.hash);
+            out.writeInt(key.key);
+        }
+
+        @Override
+        public void skipPrefix(DataInputPlus in, int version) throws IOException
+        {
+            in.skipBytesFully(4);
+        }
+
+        @Override
+        public void skipKeyWithoutPrefixOrLength(DataInputPlus in, int version) throws IOException
+        {
+            in.skipBytesFully(8);
+        }
+
+        @Override
+        public Object deserializePrefix(DataInputPlus in, int version) throws IOException
+        {
+            return in.readInt();
+        }
+
+        @Override
+        public PrefixedIntHashKey deserializeWithPrefix(Object prefix, DataInputPlus in, int version) throws IOException
+        {
+            int hash = in.readInt();
+            int key = in.readInt();
+            return PrefixedIntHashKey.key((Integer)prefix, key, hash);
+        }
     };
 
-    public static final IVersionedSerializer<RoutingKey> routingKey =
+    public static final AccordKeySerializer<RoutingKey> routingKey =
     (AccordKeySerializer<RoutingKey>)
     (AccordKeySerializer<?>)
     new AccordRoutableKey.AccordKeySerializer<PrefixedIntHashKey.Hash>()
@@ -114,6 +165,55 @@ public class BurnTestKeySerializers
         public void skip(DataInputPlus in, int version) throws IOException
         {
             in.skipBytesFully(2 * Integer.BYTES);
+        }
+
+        @Override
+        public boolean keysWithSamePrefixAreFixedLength(PrefixedIntHashKey.Hash key)
+        {
+            return true;
+        }
+
+        @Override
+        public int lengthWithoutPrefix(PrefixedIntHashKey.Hash key)
+        {
+            return 4;
+        }
+
+        @Override
+        public void serializePrefix(Object prefix, DataOutputPlus out, int version) throws IOException
+        {
+            out.writeInt((Integer) prefix);
+        }
+
+        @Override
+        public void serializeWithoutPrefixOrLength(PrefixedIntHashKey.Hash key, DataOutputPlus out, int version) throws IOException
+        {
+            out.writeInt(key.hash);
+        }
+
+        @Override
+        public void skipPrefix(DataInputPlus in, int version) throws IOException
+        {
+            in.skipBytesFully(4);
+        }
+
+        @Override
+        public void skipKeyWithoutPrefixOrLength(DataInputPlus in, int version) throws IOException
+        {
+            in.skipBytesFully(4);
+        }
+
+        @Override
+        public Object deserializePrefix(DataInputPlus in, int version) throws IOException
+        {
+            return in.readInt();
+        }
+
+        @Override
+        public PrefixedIntHashKey.Hash deserializeWithPrefix(Object prefix, DataInputPlus in, int version) throws IOException
+        {
+            int hash = in.readInt();
+            return PrefixedIntHashKey.forHash((Integer)prefix, hash);
         }
     };
 

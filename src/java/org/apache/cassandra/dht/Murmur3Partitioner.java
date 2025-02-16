@@ -239,6 +239,12 @@ public class Murmur3Partitioner implements IPartitioner
         }
 
         @Override
+        public TokenFactory tokenFactory()
+        {
+            return tokenFactory;
+        }
+
+        @Override
         public double size(Token next)
         {
             LongToken n = (LongToken) next;
@@ -386,7 +392,7 @@ public class Murmur3Partitioner implements IPartitioner
         return tokenFactory;
     }
 
-    private final Token.TokenFactory tokenFactory = new Token.TokenFactory()
+    private static final Token.TokenFactory tokenFactory = new Token.TokenFactory()
     {
         public Token fromComparableBytes(ByteSource.Peekable comparableBytes, ByteComparable.Version version)
         {

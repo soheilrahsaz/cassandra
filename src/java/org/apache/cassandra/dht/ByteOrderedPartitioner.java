@@ -136,6 +136,12 @@ public class ByteOrderedPartitioner implements IPartitioner
         }
 
         @Override
+        public TokenFactory tokenFactory()
+        {
+            return tokenFactory;
+        }
+
+        @Override
         public double size(Token next)
         {
             throw new UnsupportedOperationException(String.format("Token type %s does not support token allocation.",
@@ -285,7 +291,7 @@ public class ByteOrderedPartitioner implements IPartitioner
         return new BytesToken(buffer);
     }
 
-    private final Token.TokenFactory tokenFactory = new Token.TokenFactory()
+    private static final Token.TokenFactory tokenFactory = new Token.TokenFactory()
     {
         public Token fromComparableBytes(ByteSource.Peekable comparableBytes, ByteComparable.Version version)
         {

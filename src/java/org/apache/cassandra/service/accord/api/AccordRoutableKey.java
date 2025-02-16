@@ -24,6 +24,7 @@ import accord.primitives.RoutableKey;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.io.IVersionedSerializer;
 import org.apache.cassandra.io.util.DataInputPlus;
+import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.service.accord.api.AccordRoutingKey.MinTokenKey;
 import org.apache.cassandra.service.accord.api.AccordRoutingKey.SentinelKey;
@@ -31,9 +32,17 @@ import org.apache.cassandra.service.accord.api.AccordRoutingKey.TokenKey;
 
 public abstract class AccordRoutableKey implements RoutableKey
 {
-    public interface AccordKeySerializer<T> extends IVersionedSerializer<T>
+    public interface AccordKeySerializer<K> extends IVersionedSerializer<K>
     {
         void skip(DataInputPlus in, int version) throws IOException;
+        boolean keysWithSamePrefixAreFixedLength(K key);
+        int lengthWithoutPrefix(K key);
+        void serializePrefix(Object prefix, DataOutputPlus out, int version) throws IOException;
+        void serializeWithoutPrefixOrLength(K key, DataOutputPlus out, int version) throws IOException;
+        void skipPrefix(DataInputPlus in, int version) throws IOException;
+        void skipKeyWithoutPrefixOrLength(DataInputPlus in, int version) throws IOException;
+        Object deserializePrefix(DataInputPlus in, int version) throws IOException;
+        K deserializeWithPrefix(Object prefix, DataInputPlus in, int version) throws IOException;
     }
 
     final TableId table; // TODO (desired): use an id (TrM)
