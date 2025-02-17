@@ -62,8 +62,8 @@ import org.apache.cassandra.schema.MemtableParams;
 import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.SchemaProvider;
 import org.apache.cassandra.schema.TableId;
-import org.apache.cassandra.service.accord.api.AccordRoutingKey;
-import org.apache.cassandra.service.accord.api.AccordRoutingKey.TokenKey;
+import org.apache.cassandra.service.accord.api.TokenKey;
+import org.apache.cassandra.service.accord.api.TokenKey;
 import org.apache.cassandra.utils.CassandraGenerators;
 import org.assertj.core.api.Assertions;
 import org.mockito.Mockito;
@@ -95,7 +95,7 @@ public class AccordKeyspaceTest extends CQLTester.InMemory
 
         String tableName = createTable("CREATE TABLE %s (k int, c int, v int, PRIMARY KEY (k, c)) WITH transactional_mode = 'full'");
         TableId tableId = Schema.instance.getTableMetadata(KEYSPACE, tableName).id;
-        Ranges scope = Ranges.of(TokenRange.create(AccordRoutingKey.SentinelKey.min(tableId), AccordRoutingKey.SentinelKey.max(tableId)));
+        Ranges scope = Ranges.of(TokenRange.create(TokenKey.SentinelKey.min(tableId), TokenKey.SentinelKey.max(tableId)));
 
         AccordCommandStore store = AccordTestUtils.createAccordCommandStore(now::incrementAndGet, KEYSPACE, tableName);
 

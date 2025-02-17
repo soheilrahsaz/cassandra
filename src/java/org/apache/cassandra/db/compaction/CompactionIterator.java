@@ -93,13 +93,11 @@ import org.apache.cassandra.service.accord.AccordService;
 import org.apache.cassandra.service.accord.IAccordService;
 import org.apache.cassandra.service.accord.JournalKey;
 import org.apache.cassandra.service.accord.api.AccordAgent;
-import org.apache.cassandra.service.accord.api.AccordRoutingKey.TokenKey;
+import org.apache.cassandra.service.accord.api.TokenKey;
 import org.apache.cassandra.service.paxos.PaxosRepairHistory;
 import org.apache.cassandra.service.paxos.uncommitted.PaxosRows;
 import org.apache.cassandra.utils.TimeUUID;
 
-import static accord.local.Cleanup.ERASE;
-import static accord.local.Cleanup.EXPUNGE;
 import static accord.local.Cleanup.Input.PARTIAL;
 import static accord.local.Cleanup.NO;
 import static com.google.common.base.Preconditions.checkState;

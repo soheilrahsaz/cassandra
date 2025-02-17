@@ -59,7 +59,7 @@ import org.apache.cassandra.service.accord.AccordCacheEntry.Status;
 import org.apache.cassandra.service.accord.AccordCommandStore.Caches;
 import org.apache.cassandra.service.accord.AccordExecutor.Task;
 import org.apache.cassandra.service.accord.AccordExecutor.TaskQueue;
-import org.apache.cassandra.service.accord.api.AccordRoutingKey;
+import org.apache.cassandra.service.accord.api.TokenKey;
 import org.apache.cassandra.utils.NoSpamLogger;
 import org.apache.cassandra.utils.concurrent.Condition;
 
@@ -937,7 +937,7 @@ public abstract class AccordTask<R> extends Task implements Runnable, Function<S
             }
         }
 
-        final Set<AccordRoutingKey.TokenKey> intersectingKeys = new ObjectHashSet<>();
+        final Set<TokenKey> intersectingKeys = new ObjectHashSet<>();
         final KeyWatcher keyWatcher = new KeyWatcher();
         final Ranges ranges = ((AbstractRanges) preLoadContext.keys()).toRanges();
         final AccordCache.Type<RoutingKey, CommandsForKey, AccordSafeCommandsForKey>.Instance commandsForKeyCache;
@@ -954,8 +954,8 @@ public abstract class AccordTask<R> extends Task implements Runnable, Function<S
             for (Range range : ranges)
             {
                 AccordKeyspace.findAllKeysBetween(commandStore.id(),
-                                                  (AccordRoutingKey) range.start(), range.startInclusive(),
-                                                  (AccordRoutingKey) range.end(), range.endInclusive(),
+                                                  (TokenKey) range.start(), range.startInclusive(),
+                                                  (TokenKey) range.end(), range.endInclusive(),
                                                   intersectingKeys::add);
             }
             super.runInternal();
@@ -995,7 +995,7 @@ public abstract class AccordTask<R> extends Task implements Runnable, Function<S
             for (RoutingKey key : caches.commandsForKeys().keySet())
             {
                 if (ranges.contains(key))
-                    intersectingKeys.add((AccordRoutingKey.TokenKey) key);
+                    intersectingKeys.add((TokenKey) key);
             }
             caches.commandsForKeys().register(keyWatcher);
             super.startInternal(caches);

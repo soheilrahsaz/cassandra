@@ -50,18 +50,21 @@ import accord.primitives.Seekable;
 import accord.primitives.Seekables;
 import accord.primitives.Unseekables;
 import accord.primitives.Unseekables.UnseekablesKind;
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.TypeSizes;
 import org.apache.cassandra.io.IVersionedSerializer;
 import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.service.accord.TokenRange;
 import org.apache.cassandra.service.accord.api.AccordRoutableKey.AccordKeySerializer;
-import org.apache.cassandra.service.accord.api.AccordRoutingKey;
+import org.apache.cassandra.service.accord.api.AccordRoutableKey.AccordSearchableKeySerializer;
+import org.apache.cassandra.service.accord.api.TokenKey;
 import org.apache.cassandra.service.accord.api.PartitionKey;
 import org.apache.cassandra.utils.NullableSerializer;
 
 import static accord.utils.ArrayBuffers.cachedAny;
 import static accord.utils.ArrayBuffers.cachedInts;
+import static org.apache.cassandra.config.DatabaseDescriptor.getPartitioner;
 
 public class KeySerializers
 {
@@ -124,7 +127,7 @@ public class KeySerializers
     public static class Impl
     {
         final AccordKeySerializer<Key> key;
-        final AccordKeySerializer<RoutingKey> routingKey;
+        final AccordSearchableKeySerializer<RoutingKey> routingKey;
 
         final IVersionedSerializer<RoutingKey> nullableRoutingKey;
         final AbstractKeysSerializer<RoutingKey, RoutingKeys> routingKeys;
@@ -151,13 +154,13 @@ public class KeySerializers
         private Impl()
         {
             this((AccordKeySerializer<Key>) (AccordKeySerializer<?>) PartitionKey.serializer,
-                 (AccordKeySerializer<RoutingKey>) (AccordKeySerializer<?>) AccordRoutingKey.serializer,
+                 (AccordSearchableKeySerializer<RoutingKey>) (AccordSearchableKeySerializer<?>) TokenKey.serializer,
                  (IVersionedSerializer<Range>) (IVersionedSerializer<?>) TokenRange.serializer);
         }
 
         @VisibleForTesting
         public Impl(AccordKeySerializer<Key> key,
-                    AccordKeySerializer<RoutingKey> routingKey,
+                    AccordSearchableKeySerializer<RoutingKey> routingKey,
                     IVersionedSerializer<Range> range)
         {
             this.key = key;
@@ -538,6 +541,55 @@ public class KeySerializers
         @Override
         public void serialize(KS keys, DataOutputPlus out, int version) throws IOException
         {
+            out.writeUnsignedVInt32(keys.size());
+            for (int i=0, mi=keys.size(); i<mi; i++)
+                keySerializer.serialize(keys.get(i), out, version);
+        }
+
+        abstract KS deserialize(DataInputPlus in, int version, K[] keys) throws IOException;
+
+        public void skip(DataInputPlus in, int version) throws IOException
+        {
+            int count = in.readUnsignedVInt32();
+            for (int i = 0; i < count ; i++)
+                keySerializer.deserialize(in, version);
+        }
+
+        @Override
+        public KS deserialize(DataInputPlus in, int version) throws IOException
+        {
+            K[] keys = allocate.apply(in.readUnsignedVInt32());
+            for (int i=0; i<keys.length; i++)
+                keys[i] = keySerializer.deserialize(in, version);
+            return deserialize(in, version, keys);
+        }
+
+        @Override
+        public long serializedSize(KS keys, int version)
+        {
+            long size = TypeSizes.sizeofUnsignedVInt(keys.size());
+            for (int i=0, mi=keys.size(); i<mi; i++)
+                size += keySerializer.serializedSize(keys.get(i), version);
+            return size;
+        }
+    }
+
+    // this serializer is designed to permits using the collection in its serialized form with minimal in-memory state.
+    // it also saves some memory by avoiding duplicating prefixes (which happens to also assist faster lookups)
+    public abstract static class AbstractSearchableKeysSerializer<K extends RoutableKey, KS extends AbstractKeys<K>> implements IVersionedSerializer<KS>
+    {
+        final AccordSearchableKeySerializer<K> keySerializer;
+        final IntFunction<K[]> allocate;
+
+        public AbstractSearchableKeysSerializer(AccordSearchableKeySerializer<K> keySerializer, IntFunction<K[]> allocate)
+        {
+            this.keySerializer = keySerializer;
+            this.allocate = allocate;
+        }
+
+        @Override
+        public void serialize(KS keys, DataOutputPlus out, int version) throws IOException
+        {
             int size = keys.size();
             if (size == 0)
             {
@@ -697,8 +749,8 @@ public class KeySerializers
         TreeMap<ByteBuffer, ByteBuffer> result = new TreeMap<>();
         for (Range range : ranges)
         {
-            result.put(AccordRoutingKey.serializer.serialize((AccordRoutingKey) range.start()),
-                       AccordRoutingKey.serializer.serialize((AccordRoutingKey) range.end()));
+            result.put(TokenKey.serializer.toBytes((TokenKey) range.start()),
+                       TokenKey.serializer.toBytes((TokenKey) range.end()));
         }
         return result;
     }
@@ -709,8 +761,8 @@ public class KeySerializers
         Range[] ranges = new Range[blobMap.size()];
         for (Map.Entry<ByteBuffer, ByteBuffer> e : blobMap.entrySet())
         {
-            ranges[i++] = TokenRange.create(AccordRoutingKey.serializer.deserialize(e.getKey()),
-                                            AccordRoutingKey.serializer.deserialize(e.getValue()));
+            ranges[i++] = TokenRange.create(TokenKey.serializer.fromBytes(e.getKey(), getPartitioner()),
+                                            TokenKey.serializer.fromBytes(e.getValue(), getPartitioner()));
         }
         return Ranges.of(ranges);
     }

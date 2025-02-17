@@ -58,8 +58,8 @@ public class BurnTestKeySerializers
 
     public static final AccordRoutableKey.AccordKeySerializer<Key> key =
     (AccordRoutableKey.AccordKeySerializer<Key>)
-    (AccordRoutableKey.AccordKeySerializer<?>)
-    new AccordRoutableKey.AccordKeySerializer<PrefixedIntHashKey>()
+    (AccordRoutableKey.AccordSearchableKeySerializer<?>)
+    new AccordRoutableKey.AccordSearchableKeySerializer<PrefixedIntHashKey>()
     {
         public void serialize(PrefixedIntHashKey t, DataOutputPlus out, int version) throws IOException
         {

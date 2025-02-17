@@ -24,7 +24,7 @@ import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.marshal.ByteArrayAccessor;
 import org.apache.cassandra.dht.ByteOrderedPartitioner;
 import org.apache.cassandra.dht.Murmur3Partitioner;
-import org.apache.cassandra.service.accord.api.AccordRoutingKey;
+import org.apache.cassandra.service.accord.api.TokenKey;
 import org.apache.cassandra.service.accord.serializers.AccordRoutingKeyByteSource.FixedLength;
 import org.apache.cassandra.utils.AccordGenerators;
 import org.apache.cassandra.utils.ByteArrayUtil;
@@ -37,7 +37,7 @@ import static accord.utils.Property.qt;
 import static org.apache.cassandra.utils.AccordGenerators.fromQT;
 import static org.apache.cassandra.utils.CassandraGenerators.token;
 
-public class AccordRoutingKeyByteSourceTest
+public class TokenKeyByteSourceTest
 {
     static
     {
@@ -56,7 +56,7 @@ public class AccordRoutingKeyByteSourceTest
             byte[] maxMin = ByteSourceInverse.readBytes(serializer.maxMinAsComparableBytes());
             byte[] maxMax = ByteSourceInverse.readBytes(serializer.maxMaxAsComparableBytes());
 
-            var bytes = serializer.serialize(token);
+            var bytes = serializer.serializeNoTable(new TokenKey(null, token));
             if (serializer instanceof FixedLength)
             {
                 FixedLength fl = (FixedLength) serializer;
@@ -82,10 +82,10 @@ public class AccordRoutingKeyByteSourceTest
     public void accordRoutingKeySerde()
     {
         qt().forAll(AccordGenerators.routingKeyGen(fromQT(CassandraGenerators.TABLE_ID_GEN), fromQT(token()))).check(key -> {
-            AccordRoutingKeyByteSource.Serializer serializer = key.kindOfRoutingKey() == AccordRoutingKey.RoutingKeyKind.SENTINEL ?
+            AccordRoutingKeyByteSource.Serializer serializer = key.isSentinel() ?
                                                                // doesn't really matter...
                                                                new AccordRoutingKeyByteSource.VariableLength(ByteOrderedPartitioner.instance, ByteComparable.Version.OSS50)
-                                                                                                                                  : AccordRoutingKeyByteSource.create(key.asTokenKey().token().getPartitioner());
+                                                                                                                          : AccordRoutingKeyByteSource.create(key.token().getPartitioner());
 
             var read = serializer.fromComparableBytes(ByteArrayAccessor.instance, serializer.serialize(key));
             Assertions.assertThat(read).isEqualTo(key);

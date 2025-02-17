@@ -91,8 +91,8 @@ import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.service.accord.AccordService;
 import org.apache.cassandra.service.accord.TokenRange;
-import org.apache.cassandra.service.accord.api.AccordRoutingKey;
-import org.apache.cassandra.service.accord.api.AccordRoutingKey.TokenKey;
+import org.apache.cassandra.service.accord.api.TokenKey;
+import org.apache.cassandra.service.accord.api.TokenKey;
 import org.apache.cassandra.service.consensus.TransactionalMode;
 import org.apache.cassandra.service.consensus.migration.ConsensusKeyMigrationState;
 import org.apache.cassandra.service.consensus.migration.ConsensusMigrationRepairResult;
@@ -478,7 +478,7 @@ public abstract class AccordMigrationWriteRaceTestBase extends AccordTestBase
                                      if (route.domain() == Domain.Key)
                                          for (RoutingKey key : (KeyRoute)route)
                                          {
-                                             AccordRoutingKey routingKey = (AccordRoutingKey)key;
+                                             TokenKey routingKey = (TokenKey)key;
                                              ColumnFamilyStore cfs = ColumnFamilyStore.getIfExists(routingKey.table());
                                              if (cfs.getKeyspaceName().equals(KEYSPACE))
                                                  return true;

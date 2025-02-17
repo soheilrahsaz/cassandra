@@ -53,6 +53,7 @@ import accord.primitives.Timestamp;
 import accord.primitives.TxnId;
 import accord.topology.Topology;
 import accord.utils.Invariants;
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.ColumnIdentifier;
 import org.apache.cassandra.cql3.UntypedResultSet;
 import org.apache.cassandra.cql3.statements.schema.CreateTableStatement;
@@ -121,8 +122,7 @@ import org.apache.cassandra.schema.UserFunctions;
 import org.apache.cassandra.schema.Views;
 import org.apache.cassandra.serializers.UUIDSerializer;
 import org.apache.cassandra.service.accord.AccordConfigurationService.SyncStatus;
-import org.apache.cassandra.service.accord.api.AccordRoutingKey;
-import org.apache.cassandra.service.accord.api.AccordRoutingKey.TokenKey;
+import org.apache.cassandra.service.accord.api.TokenKey;
 import org.apache.cassandra.service.accord.serializers.AccordRoutingKeyByteSource;
 import org.apache.cassandra.service.accord.serializers.CommandSerializers;
 import org.apache.cassandra.service.accord.serializers.KeySerializers;
@@ -158,19 +158,12 @@ public class AccordKeyspace
     public static final TupleType TIMESTAMP_TYPE = new TupleType(Lists.newArrayList(LongType.instance, LongType.instance, Int32Type.instance));
 
     private static final ClusteringIndexFilter FULL_PARTITION = new ClusteringIndexNamesFilter(BTreeSet.of(new ClusteringComparator(), Clustering.EMPTY), false);
+    private static final AccordRoutingKeyByteSource.Serializer TOKEN_KEY_SERIALIZER = AccordRoutingKeyByteSource.variableLength(DatabaseDescriptor.getPartitioner());
 
-    private static final ConcurrentMap<TableId, AccordRoutingKeyByteSource.Serializer> TABLE_SERIALIZERS = new ConcurrentHashMap<>();
-
-    private static AccordRoutingKeyByteSource.Serializer getRoutingKeySerializer(AccordRoutingKey key)
+    private static AccordRoutingKeyByteSource.Serializer getRoutingKeySerializer(TokenKey key)
     {
-        return TABLE_SERIALIZERS.computeIfAbsent(key.table(), ignore -> {
-            IPartitioner partitioner;
-            if (key.kindOfRoutingKey() == AccordRoutingKey.RoutingKeyKind.TOKEN)
-                partitioner = key.asTokenKey().token().getPartitioner();
-            else
-                partitioner = SchemaHolder.schema.getTablePartitioner(key.table());
-            return AccordRoutingKeyByteSource.variableLength(partitioner);
-        });
+        Invariants.require(key.token().getPartitioner() == DatabaseDescriptor.getPartitioner());
+        return TOKEN_KEY_SERIALIZER;
     }
 
     // Schema needs all system keyspace, and this is a system keyspace!  So can not touch schema in init
@@ -318,7 +311,7 @@ public class AccordKeyspace
         }
 
         @VisibleForTesting
-        public ByteBuffer serializeKeyNoTable(AccordRoutingKey key)
+        public ByteBuffer serializeKeyNoTable(TokenKey key)
         {
             byte[] bytes = getRoutingKeySerializer(key).serializeNoTable(key);
             return ByteBuffer.wrap(bytes);
@@ -347,9 +340,9 @@ public class AccordKeyspace
             return BTreeRow.singleCellRow(Clustering.EMPTY, BufferCell.live(data, cell.timestamp(), buffer));
         }
 
-        public LocalCompositePrefixPartitioner.AbstractCompositePrefixToken getPrefixToken(int commandStore, AccordRoutingKey key)
+        public LocalCompositePrefixPartitioner.AbstractCompositePrefixToken getPrefixToken(int commandStore, TokenKey key)
         {
-            if (key.kindOfRoutingKey() == AccordRoutingKey.RoutingKeyKind.TOKEN)
+            if (!key.isSentinel())
             {
                 ByteBuffer tokenBytes = ByteBuffer.wrap(getRoutingKeySerializer(key).serializeNoTable(key));
                 return CFKPartitioner.createPrefixToken(commandStore, key.table().asUUID(), tokenBytes);
@@ -496,17 +489,17 @@ public class AccordKeyspace
      * Calculates token bounds based on key prefixes.
      */
     public static void findAllKeysBetween(int commandStore,
-                                          AccordRoutingKey start, boolean startInclusive,
-                                          AccordRoutingKey end, boolean endInclusive,
+                                          TokenKey start, boolean startInclusive,
+                                          TokenKey end, boolean endInclusive,
                                           Consumer<TokenKey> consumer)
     {
 
         Token startToken = CommandsForKeysAccessor.getPrefixToken(commandStore, start);
         Token endToken = CommandsForKeysAccessor.getPrefixToken(commandStore, end);
 
-        if (start instanceof AccordRoutingKey.SentinelKey)
+        if (start.isTableSentinel())
             startInclusive = true;
-        if (end instanceof AccordRoutingKey.SentinelKey)
+        if (end.isTableSentinel())
             endInclusive = true;
 
         PartitionPosition startPosition = startInclusive ? startToken.minKeyBound() : startToken.maxKeyBound();
@@ -602,14 +595,14 @@ public class AccordKeyspace
         return accessor.table.partitioner.decorateKey(pk);
     }
 
-    public static ByteBuffer serializeRoutingKeyNoTable(AccordRoutingKey key)
+    public static ByteBuffer serializeRoutingKeyNoTable(TokenKey key)
     {
         return CommandsForKeysAccessor.serializeKeyNoTable(key);
     }
 
     public static AccordRoutingKeyByteSource.Serializer serializer(TableId tableId)
     {
-        return TABLE_SERIALIZERS.computeIfAbsent(tableId, id -> AccordRoutingKeyByteSource.variableLength(partitioner(tableId)));
+        return TOKEN_KEY_SERIALIZER;
     }
 
     public static IPartitioner partitioner(TableId tableId)
@@ -1023,7 +1016,6 @@ public class AccordKeyspace
     {
         for (ColumnFamilyStore store : Keyspace.open(SchemaConstants.ACCORD_KEYSPACE_NAME).getColumnFamilyStores())
             store.truncateBlockingWithoutSnapshot();
-        TABLE_SERIALIZERS.clear();
         SchemaHolder.schema = Schema.instance;
     }
 

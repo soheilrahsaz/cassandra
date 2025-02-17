@@ -20,21 +20,24 @@ package org.apache.cassandra.service.accord.api;
 
 import java.io.IOException;
 
+import javax.annotation.Nonnull;
+
 import accord.primitives.RoutableKey;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.io.IVersionedSerializer;
 import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.schema.TableId;
-import org.apache.cassandra.service.accord.api.AccordRoutingKey.MinTokenKey;
-import org.apache.cassandra.service.accord.api.AccordRoutingKey.SentinelKey;
-import org.apache.cassandra.service.accord.api.AccordRoutingKey.TokenKey;
 
 public abstract class AccordRoutableKey implements RoutableKey
 {
     public interface AccordKeySerializer<K> extends IVersionedSerializer<K>
     {
         void skip(DataInputPlus in, int version) throws IOException;
+    }
+
+    public interface AccordSearchableKeySerializer<K> extends AccordKeySerializer<K>
+    {
         boolean keysWithSamePrefixAreFixedLength(K key);
         int lengthWithoutPrefix(K key);
         void serializePrefix(Object prefix, DataOutputPlus out, int version) throws IOException;
@@ -44,6 +47,13 @@ public abstract class AccordRoutableKey implements RoutableKey
         Object deserializePrefix(DataInputPlus in, int version) throws IOException;
         K deserializeWithPrefix(Object prefix, DataInputPlus in, int version) throws IOException;
     }
+
+    static final byte NORMAL_SENTINEL = 0x60;
+    static final byte BEFORE_TOKEN_SENTINEL = 0x50;
+    static final byte MIN_TABLE_SENTINEL = 0x20;
+    static final byte MAX_TABLE_SENTINEL = (byte) 0xE0;
+    static final int PREFIX_MASK = 0xC0;
+    static final int POSTFIX_MASK = 0x3F;
 
     final TableId table; // TODO (desired): use an id (TrM)
 
@@ -58,6 +68,7 @@ public abstract class AccordRoutableKey implements RoutableKey
     }
 
     public abstract Token token();
+    abstract byte sentinel();
 
     @Override
     public Object prefix()
@@ -83,37 +94,38 @@ public abstract class AccordRoutableKey implements RoutableKey
         return compareTo((AccordRoutableKey) that);
     }
 
+    @Override
+    public int compareAsRoutingKey(@Nonnull RoutableKey that)
+    {
+        return compareAsRoutingKey((AccordRoutableKey) that);
+    }
+
+    public final int compareAsRoutingKey(@Nonnull AccordRoutableKey that)
+    {
+        int thisSentinel = this.sentinel(), thatSentinel = that.sentinel();
+        int c = (thisSentinel & PREFIX_MASK) - (thatSentinel & PREFIX_MASK);
+        if (c == 0) c = this.token().compareTo(that.token());
+        if (c == 0) c = (thisSentinel & POSTFIX_MASK) - (thatSentinel & POSTFIX_MASK);
+        return c;
+    }
+
     public final int compareTo(AccordRoutableKey that)
     {
-        int cmp = this.table().compareTo(that.table());
-        if (cmp != 0)
-            return cmp;
+        int c = compareAsRoutingKey(that);
+        if (c != 0)
+            return c;
 
-        Class<?> thisClass = this.getClass();
-        Class<?> thatClass = that.getClass();
-        if (thisClass == SentinelKey.class || thatClass == SentinelKey.class)
+        boolean thisIsRoutingKey = this.getClass() == TokenKey.class;
+        boolean thatIsRoutingKey = that.getClass() == TokenKey.class;
+        if (thisIsRoutingKey | thatIsRoutingKey)
         {
-            int leftInt = thisClass == SentinelKey.class ? ((SentinelKey) this).asInt() : 0;
-            int rightInt = thatClass == SentinelKey.class ? ((SentinelKey) that).asInt() : 0;
-            return Integer.compare(leftInt, rightInt);
+            if (thisIsRoutingKey & thatIsRoutingKey)
+                return 0;
+
+            return thisIsRoutingKey ? 1 : -1;
         }
 
-        cmp = this.token().compareTo(that.token());
-
-        if (cmp != 0)
-        {
-            return cmp;
-        }
-
-        // MinTokenKey is < all TokenKey, PartitionKey with the same token
-        if (thisClass == MinTokenKey.class)
-            return thatClass == MinTokenKey.class ? 0 : -1;
-        if (thatClass == MinTokenKey.class)
-            return 1;
-
-        if (thisClass == TokenKey.class)
-            return thatClass == TokenKey.class ? 0 : 1;
-        return thatClass == TokenKey.class ? -1 : 0;
+        return ((PartitionKey)this).key.compareBytesOnly(((PartitionKey)that).key);
     }
 
     @Override

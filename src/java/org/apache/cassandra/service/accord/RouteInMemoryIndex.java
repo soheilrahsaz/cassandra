@@ -37,7 +37,7 @@ import org.apache.cassandra.index.accord.OrderedRouteSerializer;
 import org.apache.cassandra.index.accord.RouteJournalIndex;
 import org.apache.cassandra.journal.StaticSegment;
 import org.apache.cassandra.schema.TableId;
-import org.apache.cassandra.service.accord.api.AccordRoutingKey;
+import org.apache.cassandra.service.accord.api.TokenKey;
 import org.apache.cassandra.utils.ByteArrayUtil;
 import org.apache.cassandra.utils.CloseableIterator;
 import org.apache.cassandra.utils.FastByteOperations;
@@ -83,7 +83,7 @@ public class RouteInMemoryIndex<V> implements RangeSearcher
     }
 
     @Override
-    public RangeSearcher.Result search(int commandStoreId, AccordRoutingKey key, TxnId minTxnId, Timestamp maxTxnId)
+    public RangeSearcher.Result search(int commandStoreId, TokenKey key, TxnId minTxnId, Timestamp maxTxnId)
     {
         NavigableSet<TxnId> result = search(commandStoreId, key.table(), OrderedRouteSerializer.serializeRoutingKeyNoTable(key));
         return new DefaultResult(minTxnId, maxTxnId, CloseableIterator.wrap(result.iterator()));
