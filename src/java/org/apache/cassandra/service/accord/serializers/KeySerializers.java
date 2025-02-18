@@ -870,7 +870,7 @@ public class KeySerializers
         {
             RoutingKey start = keySerializer.deserializeWithPrefix(prefix, length/2, in, version);
             RoutingKey end = keySerializer.deserializeWithPrefix(prefix, length/2, in, version);
-            return TokenRange.create((TokenKey) start, (TokenKey) end);
+            return start.rangeFactory().newRange(start, end);
         }
 
         @Override
@@ -878,7 +878,7 @@ public class KeySerializers
         {
             RoutingKey start = keySerializer.deserializeWithPrefix(prefix, lengths[lengthIndex * 2], in, version);
             RoutingKey end = keySerializer.deserializeWithPrefix(prefix, lengths[lengthIndex * 2 + 1], in, version);
-            return TokenRange.create((TokenKey) start, (TokenKey) end);
+            return start.rangeFactory().newRange(start, end);
         }
     }
 

@@ -275,10 +275,8 @@ public final class TokenKey extends AccordRoutableKey implements RoutingKey, Ran
         {
             int len = partitioner.accordFixedLength();
             if (len < 0) len = in.readUnsignedVInt32();
-            TableId.skipCompactComparable(in);
-            in.readByte();
-            in.skipBytesFully(len);
-            in.readByte();
+            TableId.skipCompact(in);
+            in.skipBytesFully(len + 2);
         }
 
         // methods for encoding/decoding a single ByteBuffer value

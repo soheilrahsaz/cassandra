@@ -934,7 +934,7 @@ public class CompactionIterator extends CompactionInfo.Holder implements Unfilte
                                 PartitionUpdate.SimpleBuilder newVersion = PartitionUpdate.simpleBuilder(AccordKeyspace.Journal, partition.partitionKey());
 
                                 Row.SimpleBuilder rowBuilder = newVersion.row(firstClustering);
-                                rowBuilder.add("record", commandBuilder.asByteBuffer(info.redundantBefore, userVersion))
+                                rowBuilder.add("record", commandBuilder.asByteBuffer(userVersion))
                                           .add("user_version", userVersion);
 
                                 return newVersion.build().unfilteredIterator();

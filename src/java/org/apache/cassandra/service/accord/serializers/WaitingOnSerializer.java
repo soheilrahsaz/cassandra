@@ -20,12 +20,14 @@ package org.apache.cassandra.service.accord.serializers;
 
 import java.io.IOException;
 
-import accord.impl.CommandChange;
+import accord.impl.CommandChange.WaitingOnProvider;
 import accord.local.Command;
 import accord.local.Command.WaitingOn;
 import accord.primitives.KeyDeps;
+import accord.primitives.PartialDeps;
 import accord.primitives.RangeDeps;
 import accord.primitives.RoutingKeys;
+import accord.primitives.Timestamp;
 import accord.primitives.TxnId;
 import accord.utils.ImmutableBitSet;
 import accord.utils.Invariants;
@@ -56,35 +58,54 @@ public class WaitingOnSerializer
         }
     }
 
-    public static CommandChange.WaitingOnProvider deserializeProvider(TxnId txnId, DataInputPlus in) throws IOException
+    public static WaitingOnProvider deserializeProvider(TxnId txnId, DataInputPlus in) throws IOException
     {
         ImmutableBitSet waitingOn, appliedOrInvalidated;
+        int waitingOnLength = in.readUnsignedVInt32();
+        int appliedOrInvalidatedLength;
         {
-            int waitingOnLength = in.readUnsignedVInt32();
             waitingOn = deserialize(waitingOnLength, in);
             if (txnId.is(Range))
             {
-                int appliedOrInvalidatedLength = waitingOnLength - in.readUnsignedVInt32();
+                appliedOrInvalidatedLength = waitingOnLength - in.readUnsignedVInt32();
                 appliedOrInvalidated = deserialize(appliedOrInvalidatedLength, in);
             }
             else
             {
+                appliedOrInvalidatedLength = 0;
                 appliedOrInvalidated = null;
             }
         }
 
-        return (id, deps, executeAtLeast, uniqueHlc) -> {
-            RoutingKeys keys = deps.keyDeps.keys();
-            RangeDeps directRangeDeps = deps.rangeDeps;
-            KeyDeps directKeyDeps = deps.directKeyDeps;
-            int txnIdCount = directRangeDeps.txnIdCount() + directKeyDeps.txnIdCount();
-            Invariants.require(waitingOn.size()/64 == (txnIdCount + keys.size() + 63) / 64);
-            Invariants.require(appliedOrInvalidated == null || (appliedOrInvalidated.size()/64 == (txnIdCount + 63)/64));
+        return new WaitingOnProvider()
+        {
+            @Override
+            public WaitingOn provide(TxnId txnId, PartialDeps deps, Timestamp executeAtLeast, long uniqueHlc)
+            {
+                RoutingKeys keys = deps.keyDeps.keys();
+                RangeDeps directRangeDeps = deps.rangeDeps;
+                KeyDeps directKeyDeps = deps.directKeyDeps;
+                int txnIdCount = directRangeDeps.txnIdCount() + directKeyDeps.txnIdCount();
+                Invariants.require(waitingOn.size()/64 == (txnIdCount + keys.size() + 63) / 64);
+                Invariants.require(appliedOrInvalidated == null || (appliedOrInvalidated.size()/64 == (txnIdCount + 63)/64));
 
-            WaitingOn result = new WaitingOn(keys, directRangeDeps, directKeyDeps, waitingOn, appliedOrInvalidated);
-            if (executeAtLeast != null) return new Command.WaitingOnWithExecuteAt(result, executeAtLeast);
-            else if (uniqueHlc != 0) return new Command.WaitingOnWithMinUniqueHlc(result, uniqueHlc);
-            return result;
+                WaitingOn result = new WaitingOn(keys, directRangeDeps, directKeyDeps, waitingOn, appliedOrInvalidated);
+                if (executeAtLeast != null) return new Command.WaitingOnWithExecuteAt(result, executeAtLeast);
+                else if (uniqueHlc != 0) return new Command.WaitingOnWithMinUniqueHlc(result, uniqueHlc);
+                return result;
+            }
+
+            @Override
+            public void reserialize(DataOutputPlus out, int version) throws IOException
+            {
+                out.writeUnsignedVInt32(waitingOnLength);
+                serialize(waitingOnLength, waitingOn, out);
+                if (appliedOrInvalidated != null)
+                {
+                    out.writeUnsignedVInt32(waitingOnLength - appliedOrInvalidatedLength);
+                    serialize(appliedOrInvalidatedLength, appliedOrInvalidated, out);
+                }
+            }
         };
     }
 

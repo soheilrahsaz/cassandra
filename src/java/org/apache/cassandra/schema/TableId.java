@@ -217,32 +217,31 @@ public final class TableId implements Comparable<TableId>
         return 16;
     }
 
-    private static final int MAGIC_BYTE = (int) ((MAGIC >>> 56) & 0xf0);
-    private static final int COMPARABLE_MAGIC_BYTE = (int) ((flipSign(MAGIC) >>> 56) & 0xf0);
+    private static final int MAGIC_BYTE = (int) ((flipSign(MAGIC) >>> 56) & 0xf0);
 
     public void serializeCompact(DataOutputPlus out) throws IOException
     {
-        serializeCompact(out, Long.compare(msb, MAGIC), msb, lsb, MAGIC_BYTE);
+        serializeCompact(out, Long.compare(msb, MAGIC), msb, lsb);
     }
 
     public void serializeCompactComparable(DataOutputPlus out) throws IOException
     {
-        serializeCompact(out, Long.compare(msb, MAGIC), flipSign(msb), flipSign(lsb), COMPARABLE_MAGIC_BYTE);
+        serializeCompact(out, Long.compare(msb, MAGIC), flipSign(msb), flipSign(lsb));
     }
 
-    private static void serializeCompact(DataOutputPlus out, int compareMagic, long msb, long lsb, int magicByte) throws IOException
+    private static void serializeCompact(DataOutputPlus out, int compareMagic, long msb, long lsb) throws IOException
     {
         // make this an ordered compact serialization at the cost of one byte
         // TODO (desired): we could use 6 bits of the byte for encoding the vint header and avoid any extra bytes in most cases
         if (compareMagic == 0)
         {
             int bytes = numberOfBytes(lsb);
-            out.writeByte(magicByte | bytes);
+            out.writeByte(MAGIC_BYTE | bytes);
             out.writeLeastSignificantBytes(lsb, bytes);
         }
         else
         {
-            out.writeByte(magicByte + (compareMagic > 0 ? 0x10 : -0x10));
+            out.writeByte(MAGIC_BYTE + (compareMagic > 0 ? 0x10 : -0x10));
             out.writeLong(msb);
             out.writeLong(lsb);
         }
@@ -250,27 +249,27 @@ public final class TableId implements Comparable<TableId>
 
     public <V> int serializeCompact(V dst, ValueAccessor<V> accessor, int offset)
     {
-        return serializeCompact(dst, accessor, offset, Long.compare(msb, MAGIC), msb, lsb, MAGIC_BYTE);
+        return serializeCompact(dst, accessor, offset, Long.compare(msb, MAGIC), msb, lsb);
     }
 
     public <V> int serializeCompactComparable(V dst, ValueAccessor<V> accessor, int offset)
     {
-        return serializeCompact(dst, accessor, offset, Long.compare(msb, MAGIC), flipSign(msb), flipSign(lsb), COMPARABLE_MAGIC_BYTE);
+        return serializeCompact(dst, accessor, offset, Long.compare(msb, MAGIC), flipSign(msb), flipSign(lsb));
     }
 
-    private static <V> int serializeCompact(V dst, ValueAccessor<V> accessor, int offset, int compareMagic, long msb, long lsb, int magicByte)
+    private static <V> int serializeCompact(V dst, ValueAccessor<V> accessor, int offset, int compareMagic, long msb, long lsb)
     {
         if (compareMagic == 0)
         {
             int bytes = numberOfBytes(lsb);
-            accessor.putByte(dst, offset, (byte) (magicByte | bytes));
+            accessor.putByte(dst, offset, (byte) (MAGIC_BYTE | bytes));
             accessor.putLeastSignificantBytes(dst, offset + 1, lsb, bytes);
             return 1 + bytes;
         }
         else
         {
             int position = offset;
-            position += accessor.putByte(dst, position, (byte) (magicByte + (compareMagic > 0 ? 0x10 : -0x10)));
+            position += accessor.putByte(dst, position, (byte) (MAGIC_BYTE + (compareMagic > 0 ? 0x10 : -0x10)));
             position += accessor.putLong(dst, position, msb);
             position += accessor.putLong(dst, position, lsb);
             return position - offset;
@@ -306,18 +305,8 @@ public final class TableId implements Comparable<TableId>
 
     public static void skipCompact(DataInputPlus in) throws IOException
     {
-        skipCompact(in, MAGIC_BYTE);
-    }
-
-    public static void skipCompactComparable(DataInputPlus in) throws IOException
-    {
-        skipCompact(in, COMPARABLE_MAGIC_BYTE);
-    }
-
-    private static void skipCompact(DataInputPlus in, int magicByte) throws IOException
-    {
         int b = in.readByte();
-        if ((b & 0xf0) != magicByte)
+        if ((b & 0xf0) != MAGIC_BYTE)
             in.skipBytesFully(16);
         else
             in.skipBytesFully(b & 0xf);
@@ -360,35 +349,35 @@ public final class TableId implements Comparable<TableId>
 
     public static TableId deserializeCompact(DataInputPlus in) throws IOException
     {
-        return deserializeCompact(in, MAGIC_BYTE, TableId::keepSign);
+        return deserializeCompact(in, TableId::keepSign);
     }
 
     public static TableId deserializeCompactComparable(DataInputPlus in) throws IOException
     {
-        return deserializeCompact(in, COMPARABLE_MAGIC_BYTE, TableId::flipSign);
+        return deserializeCompact(in, TableId::flipSign);
     }
 
-    private static TableId deserializeCompact(DataInputPlus in, int magicByte, LongUnaryOperator transform) throws IOException
+    private static TableId deserializeCompact(DataInputPlus in, LongUnaryOperator transform) throws IOException
     {
         int b = in.readByte();
-        if ((b & 0xf0) != magicByte) return deserialize(in, transform);
+        if ((b & 0xf0) != MAGIC_BYTE) return deserialize(in, transform);
         else return new TableId(MAGIC, transform.applyAsLong(in.readLeastSignificantBytes(b & 0xf)));
     }
 
     public static <V> TableId deserializeCompact(V src, ValueAccessor<V> accessor, int offset)
     {
-        return deserializeCompact(src, accessor, offset, MAGIC_BYTE, TableId::keepSign);
+        return deserializeCompact(src, accessor, offset, TableId::keepSign);
     }
 
     public static <V> TableId deserializeCompactComparable(V src, ValueAccessor<V> accessor, int offset)
     {
-        return deserializeCompact(src, accessor, offset, COMPARABLE_MAGIC_BYTE, TableId::flipSign);
+        return deserializeCompact(src, accessor, offset, TableId::flipSign);
     }
 
-    private static <V> TableId deserializeCompact(V src, ValueAccessor<V> accessor, int offset, int magicByte, LongUnaryOperator transform)
+    private static <V> TableId deserializeCompact(V src, ValueAccessor<V> accessor, int offset, LongUnaryOperator transform)
     {
         int b = accessor.getByte(src, offset++);
-        if ((b & 0xf0) != magicByte) return deserialize(src, accessor, offset, transform);
+        if ((b & 0xf0) != MAGIC_BYTE) return deserialize(src, accessor, offset, transform);
         else return new TableId(MAGIC, transform.applyAsLong(accessor.getLeastSignificantBytes(src, offset, b & 0x0f)));
     }
 
