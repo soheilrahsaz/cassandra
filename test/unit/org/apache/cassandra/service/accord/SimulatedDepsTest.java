@@ -63,7 +63,7 @@ public class SimulatedDepsTest extends SimulatedAccordCommandStoreTestBase
             Keys keys = Keys.of(pk);
             FullKeyRoute route = keys.toRoute(pk.toUnseekable());
             Txn txn = createTxn(wrapInTxn("INSERT INTO " + tbl + "(pk, value) VALUES (?, ?)"), Arrays.asList(key, 42));
-            try (var instance = new SimulatedAccordCommandStore(rs))
+            try (var instance = new SimulatedAccordCommandStore(tbl.id, rs))
             {
                 List<TxnId> conflicts = new ArrayList<>(numSamples);
                 for (int i = 0; i < numSamples; i++)
@@ -96,7 +96,7 @@ public class SimulatedDepsTest extends SimulatedAccordCommandStoreTestBase
             Keys keysTokenConflict = Keys.of(pkTokenConflict);
             FullKeyRoute routeTokenConflict = keysTokenConflict.toRoute(pkTokenConflict.toUnseekable());
             Txn txnTokenConflict = createTxn(wrapInTxn("INSERT INTO " + tbl + "(pk, value) VALUES (?, ?)"), Arrays.asList(tokenConflictKey, 42));
-            try (var instance = new SimulatedAccordCommandStore(rs))
+            try (var instance = new SimulatedAccordCommandStore(tbl.id, rs))
             {
                 List<TxnId> conflicts = new ArrayList<>(numSamples);
                 for (int i = 0; i < numSamples; i++)
@@ -118,7 +118,7 @@ public class SimulatedDepsTest extends SimulatedAccordCommandStoreTestBase
 
         qt().withExamples(10).check(rs -> {
             AccordKeyspace.unsafeClear();
-            try (var instance = new SimulatedAccordCommandStore(rs))
+            try (var instance = new SimulatedAccordCommandStore(tbl.id, rs))
             {
                 long token = rs.nextLong(Long.MIN_VALUE  + 1, Long.MAX_VALUE);
                 Ranges partialRange = Ranges.of(tokenRange(tbl.id, tbl.partitioner, token - 1, token));
@@ -171,7 +171,7 @@ public class SimulatedDepsTest extends SimulatedAccordCommandStoreTestBase
 
         qt().withExamples(10).check(rs -> {
             AccordKeyspace.unsafeClear();
-            try (var instance = new SimulatedAccordCommandStore(rs))
+            try (var instance = new SimulatedAccordCommandStore(tbl.id, rs))
             {
                 long token = rs.nextLong(Long.MIN_VALUE  + 1, Long.MAX_VALUE);
                 ByteBuffer key = LongToken.keyForToken(token);
@@ -205,7 +205,7 @@ public class SimulatedDepsTest extends SimulatedAccordCommandStoreTestBase
 
         qt().withExamples(10).check(rs -> {
             AccordKeyspace.unsafeClear();
-            try (var instance = new SimulatedAccordCommandStore(rs))
+            try (var instance = new SimulatedAccordCommandStore(tbl.id, rs))
             {
                 long token = rs.nextLong(Long.MIN_VALUE + numSamples + 1, Long.MAX_VALUE - numSamples);
                 ByteBuffer key = LongToken.keyForToken(token);
@@ -246,7 +246,7 @@ public class SimulatedDepsTest extends SimulatedAccordCommandStoreTestBase
 
         qt().withExamples(10).check(rs -> {
             AccordKeyspace.unsafeClear();
-            try (var instance = new SimulatedAccordCommandStore(rs))
+            try (var instance = new SimulatedAccordCommandStore(tbl.id, rs))
             {
                 long token = rs.nextLong(Long.MIN_VALUE + numSamples + 1, Long.MAX_VALUE - numSamples);
                 ByteBuffer key = LongToken.keyForToken(token);

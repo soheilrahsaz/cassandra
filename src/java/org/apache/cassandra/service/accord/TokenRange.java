@@ -27,6 +27,7 @@ import accord.primitives.Range;
 import accord.utils.Invariants;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.dht.IPartitioner;
+import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.io.IVersionedSerializer;
 import org.apache.cassandra.io.util.DataInputPlus;
@@ -37,7 +38,7 @@ import org.apache.cassandra.utils.ObjectSizes;
 
 public class TokenRange extends Range.EndInclusive
 {
-    public static final long EMPTY_SIZE = ObjectSizes.measure(new TokenRange(TokenKey.min(TableId.fromLong(0), DatabaseDescriptor.getPartitioner()), TokenKey.max(TableId.fromLong(0), DatabaseDescriptor.getPartitioner())));
+    public static final long EMPTY_SIZE = ObjectSizes.measure(new TokenRange(TokenKey.min(TableId.fromLong(0), Murmur3Partitioner.instance), TokenKey.max(TableId.fromLong(0), Murmur3Partitioner.instance)));
 
     // Don't make this public use create or createUnsafe
     private TokenRange(TokenKey start, TokenKey end)

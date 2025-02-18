@@ -172,7 +172,7 @@ public class CompactionAccordIteratorsTest
     private void testAccordCommandsForKeyPurger(boolean singleCompaction) throws Throwable
     {
         this.singleCompaction = singleCompaction;
-        testAccordCommandsForKeyPurger(null, expectedAccordCommandsForKeyNoChange());
+        testAccordCommandsForKeyPurger(RedundantBefore.EMPTY, expectedAccordCommandsForKeyNoChange());
         testAccordCommandsForKeyPurger(redundantBefore(LT_TXN_ID), expectedAccordCommandsForKeyNoChange());
         // will erase one more than expected as converted to ExclusiveSyncPoint id which is > base id
         testAccordCommandsForKeyPurger(redundantBefore(TXN_ID), expectedAccordCommandsForKeyEraseOne());

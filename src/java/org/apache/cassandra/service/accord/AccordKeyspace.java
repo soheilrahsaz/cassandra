@@ -88,6 +88,7 @@ import org.apache.cassandra.db.transform.FilteredPartitions;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.dht.Bounds;
 import org.apache.cassandra.dht.ExcludingBounds;
+import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.IncludingExcludingBounds;
 import org.apache.cassandra.dht.LocalPartitioner;
 import org.apache.cassandra.dht.LocalPartitioner.LocalToken;
@@ -220,7 +221,7 @@ public class AccordKeyspace
             this.columns = new RegularAndStaticColumns(Columns.NONE, Columns.from(Lists.newArrayList(data)));
         }
 
-        public int getStoreId(ByteBuffer partitionKey)
+        public static int getStoreId(ByteBuffer partitionKey)
         {
             return partitionKey.getInt(partitionKey.position());
         }
@@ -235,6 +236,16 @@ public class AccordKeyspace
             return TokenKey.serializer.deserializeWithPrefixAndImpliedLength(tableId, partitionKey, ByteBufferAccessor.instance, 4);
         }
 
+        public static TokenKey getUserTableKey(TableId tableId, DecoratedKey key, IPartitioner partitioner)
+        {
+            return getUserTableKey(tableId, key.getKey(), partitioner);
+        }
+
+        public static TokenKey getUserTableKey(TableId tableId, ByteBuffer partitionKey, IPartitioner partitioner)
+        {
+            return TokenKey.serializer.deserializeWithPrefixAndImpliedLength(tableId, partitionKey, ByteBufferAccessor.instance, 4, partitioner);
+        }
+
         public static DecoratedKey makeSystemTableKey(int commandStoreId, TokenKey key)
         {
             return CFKPartitioner.decorateKey(makeSystemTableKeyBytes(commandStoreId, key));
@@ -245,7 +256,7 @@ public class AccordKeyspace
             return CFKPartitioner.getToken(makeSystemTableKeyBytes(commandStore, key));
         }
 
-        private static ByteBuffer makeSystemTableKeyBytes(int commandStore, TokenKey key)
+        public static ByteBuffer makeSystemTableKeyBytes(int commandStore, TokenKey key)
         {
             ByteBuffer result = ByteBuffer.allocate(4 + TokenKey.serializer.serializedSizeWithoutPrefix(key));
             result.putInt(commandStore);
@@ -370,7 +381,7 @@ public class AccordKeyspace
         /**
          * Calculates token bounds based on key prefixes.
          */
-        public static void findAllKeysBetween(int commandStore, TableId tableId,
+        public static void findAllKeysBetween(int commandStore, TableId tableId, IPartitioner partitioner,
                                               TokenKey start, boolean startInclusive,
                                               TokenKey end, boolean endInclusive,
                                               Consumer<TokenKey> consumer)
@@ -405,7 +416,7 @@ public class AccordKeyspace
                 // Callback will see the read errors, but if the callback fails the outer try will see those errors
                 while (iter.hasNext())
                 {
-                    TokenKey pk = CommandsForKeyAccessor.getUserTableKey(tableId, iter.next());
+                    TokenKey pk = CommandsForKeyAccessor.getUserTableKey(tableId, iter.next(), partitioner);
                     consumer.accept(pk);
                 }
             }

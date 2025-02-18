@@ -694,7 +694,7 @@ public class AccordJournal implements accord.api.Journal, RangeSearcher.Supplier
                         break;
                     case WAITING_ON:
                         Invariants.require(waitingOn != null);
-                        waitingOn.reserialize(out, userVersion);
+                        ((WaitingOnSerializer.Provider)waitingOn).reserialize(out, userVersion);
                         break;
                     case WRITES:
                         Invariants.require(writes != null);

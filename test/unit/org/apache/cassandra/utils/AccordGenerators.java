@@ -90,7 +90,7 @@ public class AccordGenerators
 
     public static Gen<IPartitioner> partitioner()
     {
-        return PARTITIONER_GEN;
+        return PARTITIONER_GEN.filter(IPartitioner::accordSupported);
     }
 
     private enum SupportedCommandTypes

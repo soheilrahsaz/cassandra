@@ -68,6 +68,7 @@ import static accord.primitives.Routable.Domain.Key;
 import static accord.primitives.Txn.Kind.EphemeralRead;
 import static accord.utils.Invariants.illegalState;
 import static org.apache.cassandra.config.CassandraRelevantProperties.DTEST_ACCORD_JOURNAL_SANITY_CHECK_ENABLED;
+import static org.apache.cassandra.config.DatabaseDescriptor.getPartitioner;
 import static org.apache.cassandra.service.accord.AccordTask.State.CANCELLED;
 import static org.apache.cassandra.service.accord.AccordTask.State.FAILED;
 import static org.apache.cassandra.service.accord.AccordTask.State.FAILING;
@@ -954,7 +955,7 @@ public abstract class AccordTask<R> extends Task implements Runnable, Function<S
         {
             for (Range range : ranges)
             {
-                CommandsForKeyAccessor.findAllKeysBetween(commandStore.id(), commandStore.tableId(),
+                CommandsForKeyAccessor.findAllKeysBetween(commandStore.id(), commandStore.tableId(), getPartitioner(),
                                                           (TokenKey) range.start(), range.startInclusive(),
                                                           (TokenKey) range.end(), range.endInclusive(),
                                                           intersectingKeys::add);

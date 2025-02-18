@@ -78,7 +78,7 @@ import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.apache.cassandra.distributed.test.log.ClusterMetadataTestHelper.setMemtable;
 import static org.apache.cassandra.schema.SchemaConstants.ACCORD_KEYSPACE_NAME;
 import static org.apache.cassandra.service.accord.AccordKeyspace.CommandsForKeyAccessor.findAllKeysBetween;
-import static org.apache.cassandra.service.accord.AccordKeyspace.CommandsForKeyAccessor.makeSystemTableKey;
+import static org.apache.cassandra.service.accord.AccordKeyspace.CommandsForKeyAccessor.makeSystemTableKeyBytes;
 import static org.apache.cassandra.service.accord.AccordTestUtils.createTxn;
 import static org.apache.cassandra.utils.AbstractTypeGenerators.getTypeSupport;
 import static org.apache.cassandra.utils.AccordGenerators.fromQT;
@@ -131,7 +131,7 @@ public class AccordKeyspaceTest extends CQLTester.InMemory
     public void findOverlappingKeys()
     {
         var tableIdGen = fromQT(CassandraGenerators.TABLE_ID_GEN);
-        var partitionGen = fromQT(CassandraGenerators.partitioners());
+        var partitionGen = fromQT(CassandraGenerators.partitioners().assuming(IPartitioner::accordSupported));
 
         var sstableFormats = DatabaseDescriptor.getSSTableFormats();
         List<String> sstableFormatNames = new ArrayList<>(sstableFormats.keySet());
@@ -206,10 +206,8 @@ public class AccordKeyspaceTest extends CQLTester.InMemory
                     {
                         // using Mutation directly (what we do in Accord) can break when user data is too large; leading to data loss
                         // The memtable will allow the write, but it will be dropped when writing to the SSTable...
-                        //TODO (now, correctness): since we store the user token + user key, if a key is close to the PK limits then we could tip over and loose our CFK
-//                        new Mutation(AccordKeyspace.getCommandsForKeyPartitionUpdate(store, pk, 42, ByteBufferUtil.EMPTY_BYTE_BUFFER)).apply();
-                        execute("INSERT INTO system_accord.commands_for_key (key) VALUES (?, ?, ?)",
-                                makeSystemTableKey(store, pk));
+                        execute("INSERT INTO system_accord.commands_for_key (key) VALUES (?)",
+                                makeSystemTableKeyBytes(store, pk));
                     }
                     catch (IllegalArgumentException | InvalidRequestException e)
                     {
@@ -246,17 +244,17 @@ public class AccordKeyspaceTest extends CQLTester.InMemory
                         SortedSet<TokenKey> keys = e.getValue();
                         if (keys.isEmpty())
                             continue;
-                        expectedCqlStoresToKeys.put(store, new TreeSet<>(keys.stream().map(CommandsForKeyAccessor::serializeUserTableKey).collect(Collectors.toList())));
+                        expectedCqlStoresToKeys.put(store, new TreeSet<>(keys.stream().map(key -> makeSystemTableKeyBytes(store, key)).collect(Collectors.toList())));
                     }
 
                     // make sure no data loss... when this test was written sstable had all the rows but the sstable didn't... this
                     // is mostly a santity check to detect that case early
-                    var resultSet = execute("SELECT store_id, table_id, key_token FROM system_accord.commands_for_key ALLOW FILTERING");
+                    var resultSet = execute("SELECT key FROM system_accord.commands_for_key ALLOW FILTERING");
                     TreeMap<Integer, SortedSet<ByteBuffer>> cqlStoresToKeys = new TreeMap<>();
                     for (var row : resultSet)
                     {
-                        int storeId = row.getInt("store_id");
-                        ByteBuffer bb = row.getBytes("key_token");
+                        ByteBuffer bb = row.getBytes("key");
+                        int storeId = CommandsForKeyAccessor.getStoreId(bb);
                         cqlStoresToKeys.computeIfAbsent(storeId, ignore -> new TreeSet<>()).add(bb);
                     }
                     Assertions.assertThat(cqlStoresToKeys).isEqualTo(expectedCqlStoresToKeys);
@@ -286,7 +284,7 @@ public class AccordKeyspaceTest extends CQLTester.InMemory
                     TokenKey end = expected.get(expected.size() - 1);
 
                     List<TokenKey> actual = new ArrayList<>();
-                    findAllKeysBetween(store, storeTableIds.get(store), start, true, end, true, actual::add);
+                    findAllKeysBetween(store, storeTableIds.get(store), start.token().getPartitioner(), start, true, end, true, actual::add);
                     Assertions.assertThat(actual).isEqualTo(expected);
                 }
 

@@ -132,16 +132,21 @@ public final class TokenKey extends AccordRoutableKey implements RoutingKey, Ran
         return token;
     }
 
-    @Override
-    public String toString()
+    public Object printableSuffix()
     {
-        Object suffix = token;
+        Object suffix = suffix();
         if (isSentinel())
         {
             if (isTableSentinel()) suffix = isMin() ? "-Inf" : "+Inf";
             else suffix = suffix + "(-epsilon)";
         }
-        return prefix() + ":" + suffix;
+        return suffix;
+    }
+
+    @Override
+    public String toString()
+    {
+        return prefix() + ":" + printableSuffix();
     }
 
     public boolean isMin()

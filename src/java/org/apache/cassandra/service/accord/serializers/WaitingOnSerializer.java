@@ -58,55 +58,60 @@ public class WaitingOnSerializer
         }
     }
 
-    public static WaitingOnProvider deserializeProvider(TxnId txnId, DataInputPlus in) throws IOException
+    public static final class Provider implements WaitingOnProvider
     {
-        ImmutableBitSet waitingOn, appliedOrInvalidated;
-        int waitingOnLength = in.readUnsignedVInt32();
-        int appliedOrInvalidatedLength;
+        final ImmutableBitSet waitingOn, appliedOrInvalidated;
+        final int waitingOnLength, appliedOrInvalidatedLength;
+
+        public Provider(ImmutableBitSet waitingOn, ImmutableBitSet appliedOrInvalidated, int waitingOnLength, int appliedOrInvalidatedLength)
         {
-            waitingOn = deserialize(waitingOnLength, in);
-            if (txnId.is(Range))
-            {
-                appliedOrInvalidatedLength = waitingOnLength - in.readUnsignedVInt32();
-                appliedOrInvalidated = deserialize(appliedOrInvalidatedLength, in);
-            }
-            else
-            {
-                appliedOrInvalidatedLength = 0;
-                appliedOrInvalidated = null;
-            }
+            this.waitingOn = waitingOn;
+            this.appliedOrInvalidated = appliedOrInvalidated;
+            this.waitingOnLength = waitingOnLength;
+            this.appliedOrInvalidatedLength = appliedOrInvalidatedLength;
         }
 
-        return new WaitingOnProvider()
+        @Override
+        public WaitingOn provide(TxnId txnId, PartialDeps deps, Timestamp executeAtLeast, long uniqueHlc)
         {
-            @Override
-            public WaitingOn provide(TxnId txnId, PartialDeps deps, Timestamp executeAtLeast, long uniqueHlc)
-            {
-                RoutingKeys keys = deps.keyDeps.keys();
-                RangeDeps directRangeDeps = deps.rangeDeps;
-                KeyDeps directKeyDeps = deps.directKeyDeps;
-                int txnIdCount = directRangeDeps.txnIdCount() + directKeyDeps.txnIdCount();
-                Invariants.require(waitingOn.size()/64 == (txnIdCount + keys.size() + 63) / 64);
-                Invariants.require(appliedOrInvalidated == null || (appliedOrInvalidated.size()/64 == (txnIdCount + 63)/64));
+            RoutingKeys keys = deps.keyDeps.keys();
+            RangeDeps directRangeDeps = deps.rangeDeps;
+            KeyDeps directKeyDeps = deps.directKeyDeps;
+            int txnIdCount = directRangeDeps.txnIdCount() + directKeyDeps.txnIdCount();
+            Invariants.require(waitingOn.size()/64 == (txnIdCount + keys.size() + 63) / 64);
+            Invariants.require(appliedOrInvalidated == null || (appliedOrInvalidated.size()/64 == (txnIdCount + 63)/64));
 
-                WaitingOn result = new WaitingOn(keys, directRangeDeps, directKeyDeps, waitingOn, appliedOrInvalidated);
-                if (executeAtLeast != null) return new Command.WaitingOnWithExecuteAt(result, executeAtLeast);
-                else if (uniqueHlc != 0) return new Command.WaitingOnWithMinUniqueHlc(result, uniqueHlc);
-                return result;
-            }
+            WaitingOn result = new WaitingOn(keys, directRangeDeps, directKeyDeps, waitingOn, appliedOrInvalidated);
+            if (executeAtLeast != null) return new Command.WaitingOnWithExecuteAt(result, executeAtLeast);
+            else if (uniqueHlc != 0) return new Command.WaitingOnWithMinUniqueHlc(result, uniqueHlc);
+            return result;
+        }
 
-            @Override
-            public void reserialize(DataOutputPlus out, int version) throws IOException
+        public void reserialize(DataOutputPlus out, int version) throws IOException
+        {
+            out.writeUnsignedVInt32(waitingOnLength);
+            serialize(waitingOnLength, waitingOn, out);
+            if (appliedOrInvalidated != null)
             {
-                out.writeUnsignedVInt32(waitingOnLength);
-                serialize(waitingOnLength, waitingOn, out);
-                if (appliedOrInvalidated != null)
-                {
-                    out.writeUnsignedVInt32(waitingOnLength - appliedOrInvalidatedLength);
-                    serialize(appliedOrInvalidatedLength, appliedOrInvalidated, out);
-                }
+                out.writeUnsignedVInt32(waitingOnLength - appliedOrInvalidatedLength);
+                serialize(appliedOrInvalidatedLength, appliedOrInvalidated, out);
             }
-        };
+        }
+    }
+
+    public static WaitingOnProvider deserializeProvider(TxnId txnId, DataInputPlus in) throws IOException
+    {
+        ImmutableBitSet waitingOn, appliedOrInvalidated = null;
+        int waitingOnLength, appliedOrInvalidatedLength = 0;
+        waitingOnLength = in.readUnsignedVInt32();
+        waitingOn = deserialize(waitingOnLength, in);
+        if (txnId.is(Range))
+        {
+            appliedOrInvalidatedLength = waitingOnLength - in.readUnsignedVInt32();
+            appliedOrInvalidated = deserialize(appliedOrInvalidatedLength, in);
+        }
+
+        return new Provider(waitingOn, appliedOrInvalidated, waitingOnLength, appliedOrInvalidatedLength);
     }
 
     public static void skip(TxnId txnId, DataInputPlus in) throws IOException

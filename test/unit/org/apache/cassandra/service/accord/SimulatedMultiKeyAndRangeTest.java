@@ -62,7 +62,7 @@ public class SimulatedMultiKeyAndRangeTest extends SimulatedAccordCommandStoreTe
 
         qt().withExamples(100).check(rs -> {
             AccordKeyspace.unsafeClear();
-            try (var instance = new SimulatedAccordCommandStore(rs))
+            try (var instance = new SimulatedAccordCommandStore(tbl.id, rs))
             {
                 Gen.LongGen tokenGen = tokenDistribution.next(rs);
                 Gen<Domain> domainGen = domainDistribution.next(rs);

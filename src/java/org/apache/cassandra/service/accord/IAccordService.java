@@ -44,6 +44,7 @@ import accord.primitives.Txn;
 import accord.primitives.TxnId;
 import accord.topology.Topology;
 import accord.topology.TopologyManager;
+import accord.utils.Invariants;
 import org.agrona.collections.Int2ObjectHashMap;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.ColumnFamilyStore;
@@ -161,9 +162,9 @@ public interface IAccordService
         public AccordCompactionInfo(int commandStoreId, RedundantBefore redundantBefore, RangesForEpoch ranges, TableId tableId)
         {
             this.commandStoreId = commandStoreId;
-            this.redundantBefore = redundantBefore;
-            this.ranges = ranges;
-            this.tableId = tableId;
+            this.redundantBefore = Invariants.nonNull(redundantBefore);
+            this.ranges = Invariants.nonNull(ranges);
+            this.tableId = Invariants.nonNull(tableId);
         }
     }
 

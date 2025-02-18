@@ -349,9 +349,9 @@ public abstract class SimulatedAccordCommandStoreTestBase extends CQLTester
         }
     }
 
-    protected static Gen<Pair<Txn, FullRoute<?>>> randomTxn(Gen<Routable.Domain> domainGen, Gen.LongGen tokenGen)
+    protected static Gen<Pair<Txn, FullRoute<?>>> randomTxn(TableMetadata tbl, Gen<Routable.Domain> domainGen, Gen.LongGen tokenGen)
     {
-        TableMetadata tbl = reverseTokenTbl;
+        Invariants.require(tbl == reverseTokenTbl);
         Invariants.requireArgument(tbl.partitioner == Murmur3Partitioner.instance, "Only murmur partitioner is supported; given %s", tbl.partitioner.getClass());
         Gen<PartitionKey> keyGen = rs -> new PartitionKey(tbl.id, tbl.partitioner.decorateKey(Murmur3Partitioner.LongToken.keyForToken(tokenGen.nextLong(rs))));
         Gen<Range> rangeGen = rs -> {
