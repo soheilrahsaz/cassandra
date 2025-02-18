@@ -86,8 +86,8 @@ import org.apache.cassandra.service.accord.AccordService;
 import org.apache.cassandra.service.accord.AccordTestUtils;
 import org.apache.cassandra.service.accord.AccordTopology;
 import org.apache.cassandra.service.accord.IAccordService;
+import org.apache.cassandra.service.accord.IAccordService.AccordCompactionInfo;
 import org.apache.cassandra.service.accord.TokenRange;
-import org.apache.cassandra.service.accord.api.TokenKey;
 import org.apache.cassandra.service.accord.api.TokenKey;
 import org.apache.cassandra.service.consensus.TransactionalMode;
 import org.apache.cassandra.tcm.ClusterMetadata;
@@ -177,8 +177,8 @@ public class RouteIndexTest extends CQLTester.InMemory
         TokenRange range = selectExistingRange(rs, ranges);
 
         // have a key, so find a key within the range
-        long start = range.start().kindOfRoutingKey() == TokenKey.RoutingKeyKind.SENTINEL ? Long.MIN_VALUE : ((LongToken) range.start().token()).token;
-        long end = range.end().kindOfRoutingKey() == TokenKey.RoutingKeyKind.SENTINEL ? Long.MAX_VALUE : ((LongToken) range.end().token()).token;
+        long start = range.start().isMin() ? Long.MIN_VALUE : ((LongToken) range.start().token()).token;
+        long end = range.end().isMax() ? Long.MAX_VALUE : ((LongToken) range.end().token()).token;
         long token = 1 + rs.nextLong(start, end);
         return new KeySearch(storeId, new TokenKey(tableId, new LongToken(token)));
     }
@@ -484,7 +484,7 @@ public class RouteIndexTest extends CQLTester.InMemory
 
             // the reason for the mocking is to speed up compaction.  Collecting the info from the stores has been slow and its always empty in this test... so stub it out to speed up the test
             AccordService mock = Mockito.spy(as);
-            Mockito.doReturn(emptyCompactionInfo()).when(mock).getCompactionInfo();
+            Mockito.doReturn(emptyCompactionInfo(tableId)).when(mock).getCompactionInfo();
             AccordService.unsafeSetNewAccordService(mock);
 
             AccordService.replayJournal(as);
@@ -628,21 +628,15 @@ public class RouteIndexTest extends CQLTester.InMemory
         }
     };
 
-    private static IAccordService.CompactionInfo emptyCompactionInfo()
+    private static IAccordService.AccordCompactionInfos emptyCompactionInfo(TableId tableId)
     {
-        Int2ObjectHashMap<RedundantBefore> redundantBefores = new Int2ObjectHashMap<>();
-        Int2ObjectHashMap<DurableBefore> durableBefores = new Int2ObjectHashMap<>();
-        Int2ObjectHashMap<CommandStores.RangesForEpoch> ranges = new Int2ObjectHashMap<>();
+        IAccordService.AccordCompactionInfos compactionInfos = new IAccordService.AccordCompactionInfos(DurableBefore.EMPTY);
         RedundantBefore redundantBefore = Mockito.spy(RedundantBefore.EMPTY);
         Mockito.doReturn(RedundantStatus.NONE).when(redundantBefore).status(Mockito.any(), Mockito.any(), (Participants<?>) Mockito.any());
         Mockito.doReturn(RedundantStatus.NONE).when(redundantBefore).status(Mockito.any(), Mockito.any(), (RoutingKey) Mockito.any());
         for (int i = 0; i < MAX_STORES; i++)
-        {
-            redundantBefores.put(i, redundantBefore);
-            durableBefores.put(i, DurableBefore.EMPTY);
-            ranges.put(i, new CommandStores.RangesForEpoch(1, Ranges.EMPTY));
-        }
-        return new IAccordService.CompactionInfo(redundantBefores, ranges, durableBefores);
+            compactionInfos.put(i, new AccordCompactionInfo(i, redundantBefore, new CommandStores.RangesForEpoch(1, Ranges.EMPTY), tableId));
+        return compactionInfos;
     }
 
     private static ColumnFamilyStore cfs()

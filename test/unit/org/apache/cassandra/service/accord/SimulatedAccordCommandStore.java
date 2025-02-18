@@ -342,7 +342,7 @@ public class SimulatedAccordCommandStore implements AutoCloseable
         }
     }
 
-    private static boolean intersects(ColumnFamilyStore store, Memtable memtable, Unseekables<RoutingKey> keys, Ranges ranges)
+    private boolean intersects(ColumnFamilyStore store, Memtable memtable, Unseekables<RoutingKey> keys, Ranges ranges)
     {
         if (keys.isEmpty() && ranges.isEmpty()) // shouldn't happen, but just in case...
             return false;
@@ -355,7 +355,7 @@ public class SimulatedAccordCommandStore implements AutoCloseable
                 {
                     while (it.hasNext())
                     {
-                        var key = AccordKeyspace.CommandsForKeysAccessor.getKey(it.next().partitionKey());
+                        var key = AccordKeyspace.CommandsForKeyAccessor.getUserTableKey(commandStore.tableId(), it.next().partitionKey());
                         if (keys.contains(key) || ranges.intersects(key))
                             return true;
                     }

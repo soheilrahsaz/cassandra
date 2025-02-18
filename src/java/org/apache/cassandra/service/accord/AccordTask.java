@@ -59,6 +59,7 @@ import org.apache.cassandra.service.accord.AccordCacheEntry.Status;
 import org.apache.cassandra.service.accord.AccordCommandStore.Caches;
 import org.apache.cassandra.service.accord.AccordExecutor.Task;
 import org.apache.cassandra.service.accord.AccordExecutor.TaskQueue;
+import org.apache.cassandra.service.accord.AccordKeyspace.CommandsForKeyAccessor;
 import org.apache.cassandra.service.accord.api.TokenKey;
 import org.apache.cassandra.utils.NoSpamLogger;
 import org.apache.cassandra.utils.concurrent.Condition;
@@ -953,10 +954,10 @@ public abstract class AccordTask<R> extends Task implements Runnable, Function<S
         {
             for (Range range : ranges)
             {
-                AccordKeyspace.findAllKeysBetween(commandStore.id(),
-                                                  (TokenKey) range.start(), range.startInclusive(),
-                                                  (TokenKey) range.end(), range.endInclusive(),
-                                                  intersectingKeys::add);
+                CommandsForKeyAccessor.findAllKeysBetween(commandStore.id(), commandStore.tableId(),
+                                                          (TokenKey) range.start(), range.startInclusive(),
+                                                          (TokenKey) range.end(), range.endInclusive(),
+                                                          intersectingKeys::add);
             }
             super.runInternal();
         }

@@ -38,22 +38,22 @@ public abstract class AccordRoutableKey implements RoutableKey
 
     public interface AccordSearchableKeySerializer<K> extends AccordKeySerializer<K>
     {
-        boolean keysWithSamePrefixAreFixedLength(K key);
-        int lengthWithoutPrefix(K key);
+        // -1 means dynamic
+        int fixedKeyLengthForPrefix(Object prefix);
+        int serializedSizeOfPrefix(Object prefix);
+        int serializedSizeWithoutPrefix(K key);
         void serializePrefix(Object prefix, DataOutputPlus out, int version) throws IOException;
         void serializeWithoutPrefixOrLength(K key, DataOutputPlus out, int version) throws IOException;
-        void skipPrefix(DataInputPlus in, int version) throws IOException;
-        void skipKeyWithoutPrefixOrLength(DataInputPlus in, int version) throws IOException;
         Object deserializePrefix(DataInputPlus in, int version) throws IOException;
-        K deserializeWithPrefix(Object prefix, DataInputPlus in, int version) throws IOException;
+        K deserializeWithPrefix(Object prefix, int length, DataInputPlus in, int version) throws IOException;
     }
 
-    static final byte NORMAL_SENTINEL = 0x60;
-    static final byte BEFORE_TOKEN_SENTINEL = 0x50;
-    static final byte MIN_TABLE_SENTINEL = 0x20;
-    static final byte MAX_TABLE_SENTINEL = (byte) 0xE0;
-    static final int PREFIX_MASK = 0xC0;
-    static final int POSTFIX_MASK = 0x3F;
+    static final byte MAX_TABLE_SENTINEL = 0x48;
+    static final byte NORMAL_SENTINEL = 0x28;
+    static final byte BEFORE_TOKEN_SENTINEL = 0x24;
+    static final byte MIN_TABLE_SENTINEL = 0x18;
+    static final int PREFIX_MASK = 0xF0;
+    static final int SUFFIX_MASK = 0x0F;
 
     final TableId table; // TODO (desired): use an id (TrM)
 
@@ -102,10 +102,12 @@ public abstract class AccordRoutableKey implements RoutableKey
 
     public final int compareAsRoutingKey(@Nonnull AccordRoutableKey that)
     {
+        int c = this.table.compareTo(that.table);
+        if (c != 0) return c;
         int thisSentinel = this.sentinel(), thatSentinel = that.sentinel();
-        int c = (thisSentinel & PREFIX_MASK) - (thatSentinel & PREFIX_MASK);
+        c = (thisSentinel & PREFIX_MASK) - (thatSentinel & PREFIX_MASK);
         if (c == 0) c = this.token().compareTo(that.token());
-        if (c == 0) c = (thisSentinel & POSTFIX_MASK) - (thatSentinel & POSTFIX_MASK);
+        if (c == 0) c = (thisSentinel & SUFFIX_MASK) - (thatSentinel & SUFFIX_MASK);
         return c;
     }
 

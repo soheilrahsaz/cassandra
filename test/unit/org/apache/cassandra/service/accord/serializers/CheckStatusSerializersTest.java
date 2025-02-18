@@ -86,7 +86,7 @@ public class CheckStatusSerializersTest
             {
                 case Key:
                     // TODO (coverage): don't hard code murmur
-                    Gen<TokenKey> keyGen = AccordGenerators.routingKeyGen(fromQT(CassandraGenerators.TABLE_ID_GEN), Gens.constant(TokenKey.RoutingKeyKind.TOKEN), fromQT(CassandraGenerators.murmurToken()));
+                    Gen<TokenKey> keyGen = AccordGenerators.routingKeyGen(fromQT(CassandraGenerators.TABLE_ID_GEN), Gens.constant(TokenKey.RoutingKeyKind.TOKEN), fromQT(CassandraGenerators.murmurToken()), Murmur3Partitioner.instance);
                     TokenKey homeKey = keyGen.next(rs);
                     List<TokenKey> forOrdering = Gens.lists(keyGen).unique().ofSizeBetween(1, 10).next(rs);
                     forOrdering.sort(Comparator.naturalOrder());

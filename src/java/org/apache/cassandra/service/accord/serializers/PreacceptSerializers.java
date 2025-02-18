@@ -21,7 +21,6 @@ package org.apache.cassandra.service.accord.serializers;
 import java.io.IOException;
 import javax.annotation.Nullable;
 
-import accord.coordinate.ExecuteFlag;
 import accord.coordinate.ExecuteFlag.ExecuteFlags;
 import accord.messages.PreAccept;
 import accord.messages.PreAccept.PreAcceptOk;

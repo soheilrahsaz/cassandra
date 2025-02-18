@@ -378,7 +378,7 @@ public class AccordGenerators
         return ranges(Gens.lists(fromQT(CassandraGenerators.TABLE_ID_GEN)).unique().ofSizeBetween(1, 10).map(l -> new HashSet<>(l)), PARTITIONER_GEN);
     }
 
-    public static Gen<Ranges> ranges(Gen<Set<TableId>> tableIdGen, Gen<IPartitioner> partitionerGen, IPartitioner partitioner)
+    public static Gen<Ranges> ranges(Gen<Set<TableId>> tableIdGen, Gen<IPartitioner> partitionerGen)
     {
         return rs -> {
             Set<TableId> tables = tableIdGen.next(rs);

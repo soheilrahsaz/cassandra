@@ -23,7 +23,6 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.function.Supplier;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
@@ -152,26 +151,42 @@ public interface IAccordService
 
     void receive(Message<List<AccordSyncPropagator.Notification>> message);
 
-    class CompactionInfo
+    class AccordCompactionInfo
     {
-        static final Supplier<CompactionInfo> NO_OP = () ->  new CompactionInfo(new Int2ObjectHashMap<>(), new Int2ObjectHashMap<>(), new Int2ObjectHashMap<>());
+        public final int commandStoreId;
+        public final RedundantBefore redundantBefore;
+        public final RangesForEpoch ranges;
+        public final TableId tableId;
 
-        public final Int2ObjectHashMap<RedundantBefore> redundantBefores;
-        public final Int2ObjectHashMap<DurableBefore> durableBefores;
-        public final Int2ObjectHashMap<RangesForEpoch> ranges;
-
-        public CompactionInfo(Int2ObjectHashMap<RedundantBefore> redundantBefores, Int2ObjectHashMap<RangesForEpoch> ranges, Int2ObjectHashMap<DurableBefore> durableBefores)
+        public AccordCompactionInfo(int commandStoreId, RedundantBefore redundantBefore, RangesForEpoch ranges, TableId tableId)
         {
-            this.redundantBefores = redundantBefores;
+            this.commandStoreId = commandStoreId;
+            this.redundantBefore = redundantBefore;
             this.ranges = ranges;
-            this.durableBefores = durableBefores;
+            this.tableId = tableId;
+        }
+    }
+
+    class AccordCompactionInfos extends Int2ObjectHashMap<AccordCompactionInfo>
+    {
+        public final DurableBefore durableBefore;
+
+        public AccordCompactionInfos(DurableBefore durableBefore)
+        {
+            this.durableBefore = durableBefore;
+        }
+
+        public AccordCompactionInfos(DurableBefore durableBefore, AccordCompactionInfos copy)
+        {
+            super(copy);
+            this.durableBefore = durableBefore;
         }
     }
 
     /**
      * Fetch the redundnant befores for every command store
      */
-    CompactionInfo getCompactionInfo();
+    AccordCompactionInfos getCompactionInfo();
 
     Agent agent();
 
@@ -300,9 +315,9 @@ public interface IAccordService
         public void receive(Message<List<AccordSyncPropagator.Notification>> message) {}
 
         @Override
-        public CompactionInfo getCompactionInfo()
+        public AccordCompactionInfos getCompactionInfo()
         {
-            return new CompactionInfo(new Int2ObjectHashMap<>(), new Int2ObjectHashMap<>(), new Int2ObjectHashMap<>());
+            return new AccordCompactionInfos(DurableBefore.EMPTY);
         }
 
         @Override
@@ -487,7 +502,7 @@ public interface IAccordService
         }
 
         @Override
-        public CompactionInfo getCompactionInfo()
+        public AccordCompactionInfos getCompactionInfo()
         {
             return delegate.getCompactionInfo();
         }

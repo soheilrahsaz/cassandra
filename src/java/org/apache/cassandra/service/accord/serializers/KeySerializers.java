@@ -43,14 +43,15 @@ import accord.primitives.PartialRoute;
 import accord.primitives.Participants;
 import accord.primitives.Range;
 import accord.primitives.Ranges;
+import accord.primitives.Routable;
 import accord.primitives.RoutableKey;
+import accord.primitives.Routables;
 import accord.primitives.Route;
 import accord.primitives.RoutingKeys;
 import accord.primitives.Seekable;
 import accord.primitives.Seekables;
 import accord.primitives.Unseekables;
 import accord.primitives.Unseekables.UnseekablesKind;
-import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.TypeSizes;
 import org.apache.cassandra.io.IVersionedSerializer;
 import org.apache.cassandra.io.util.DataInputPlus;
@@ -62,9 +63,7 @@ import org.apache.cassandra.service.accord.api.TokenKey;
 import org.apache.cassandra.service.accord.api.PartitionKey;
 import org.apache.cassandra.utils.NullableSerializer;
 
-import static accord.utils.ArrayBuffers.cachedAny;
 import static accord.utils.ArrayBuffers.cachedInts;
-import static org.apache.cassandra.config.DatabaseDescriptor.getPartitioner;
 
 public class KeySerializers
 {
@@ -72,11 +71,11 @@ public class KeySerializers
     public static final IVersionedSerializer<RoutingKey> routingKey;
 
     public static final IVersionedSerializer<RoutingKey> nullableRoutingKey;
-    public static final AbstractKeysSerializer<RoutingKey, RoutingKeys> routingKeys;
+    public static final AbstractSearchableKeysSerializer<RoutingKey, RoutingKeys> routingKeys;
     public static final IVersionedSerializer<Keys> keys;
 
-    public static final AbstractKeysSerializer<?, PartialKeyRoute> partialKeyRoute;
-    public static final AbstractKeysSerializer<?, FullKeyRoute> fullKeyRoute;
+    public static final AbstractSearchableKeysSerializer<?, PartialKeyRoute> partialKeyRoute;
+    public static final AbstractSearchableKeysSerializer<?, FullKeyRoute> fullKeyRoute;
 
     public static final IVersionedSerializer<Range> range;
     public static final AbstractRangesSerializer<Ranges> ranges;
@@ -130,11 +129,11 @@ public class KeySerializers
         final AccordSearchableKeySerializer<RoutingKey> routingKey;
 
         final IVersionedSerializer<RoutingKey> nullableRoutingKey;
-        final AbstractKeysSerializer<RoutingKey, RoutingKeys> routingKeys;
+        final AbstractSearchableKeysSerializer<RoutingKey, RoutingKeys> routingKeys;
         final IVersionedSerializer<Keys> keys;
 
-        final AbstractKeysSerializer<?, PartialKeyRoute> partialKeyRoute;
-        final AbstractKeysSerializer<?, FullKeyRoute> fullKeyRoute;
+        final AbstractSearchableKeysSerializer<?, PartialKeyRoute> partialKeyRoute;
+        final AbstractSearchableKeysSerializer<?, FullKeyRoute> fullKeyRoute;
 
         final IVersionedSerializer<Range> range;
         final AbstractRangesSerializer<Ranges> ranges;
@@ -168,7 +167,7 @@ public class KeySerializers
             this.range = range;
 
             this.nullableRoutingKey = NullableSerializer.wrap(routingKey);
-            this.routingKeys = new AbstractKeysSerializer<>(routingKey, RoutingKey[]::new)
+            this.routingKeys = new AbstractSearchableKeysSerializer<>(routingKey, RoutingKey[]::new)
             {
                 @Override RoutingKeys deserialize(DataInputPlus in, int version, RoutingKey[] keys)
                 {
@@ -184,8 +183,7 @@ public class KeySerializers
                 }
             };
 
-
-            this.partialKeyRoute = new AbstractKeysSerializer<>(routingKey, RoutingKey[]::new)
+            this.partialKeyRoute = new AbstractSearchableKeysSerializer<>(routingKey, RoutingKey[]::new)
             {
                 @Override PartialKeyRoute deserialize(DataInputPlus in, int version, RoutingKey[] keys) throws IOException
                 {
@@ -201,14 +199,14 @@ public class KeySerializers
                 }
 
                 @Override
-                public long serializedSize(PartialKeyRoute keys, int version)
+                public long serializedSize(PartialKeyRoute routables, int version)
                 {
-                    return super.serializedSize(keys, version)
-                           + routingKey.serializedSize(keys.homeKey, version);
+                    return super.serializedSize(routables, version)
+                           + routingKey.serializedSize(routables.homeKey, version);
                 }
             };
 
-            this.fullKeyRoute = new AbstractKeysSerializer<>(routingKey, RoutingKey[]::new)
+            this.fullKeyRoute = new AbstractSearchableKeysSerializer<>(routingKey, RoutingKey[]::new)
             {
                 @Override FullKeyRoute deserialize(DataInputPlus in, int version, RoutingKey[] keys) throws IOException
                 {
@@ -224,14 +222,14 @@ public class KeySerializers
                 }
 
                 @Override
-                public long serializedSize(FullKeyRoute route, int version)
+                public long serializedSize(FullKeyRoute routables, int version)
                 {
-                    return super.serializedSize(route, version)
-                           + routingKey.serializedSize(route.homeKey, version);
+                    return super.serializedSize(routables, version)
+                           + routingKey.serializedSize(routables.homeKey, version);
                 }
             };
 
-            this.ranges = new AbstractRangesSerializer<Ranges>(range)
+            this.ranges = new AbstractRangesSerializer<>(routingKey)
             {
                 @Override
                 public Ranges deserialize(DataInputPlus in, int version, Range[] ranges)
@@ -241,7 +239,7 @@ public class KeySerializers
             };
 
 
-            this.partialRangeRoute = new AbstractRangesSerializer<>(range)
+            this.partialRangeRoute = new AbstractRangesSerializer<>(routingKey)
             {
                 @Override PartialRangeRoute deserialize(DataInputPlus in, int version, Range[] rs) throws IOException
                 {
@@ -264,7 +262,7 @@ public class KeySerializers
                 }
             };
 
-            this.fullRangeRoute = new AbstractRangesSerializer<>(range)
+            this.fullRangeRoute = new AbstractRangesSerializer<>(routingKey)
             {
                 @Override FullRangeRoute deserialize(DataInputPlus in, int version, Range[] Ranges) throws IOException
                 {
@@ -307,17 +305,17 @@ public class KeySerializers
     public static class AbstractRoutablesSerializer<RS extends Unseekables<?>> implements IVersionedSerializer<RS>
     {
         final EnumSet<UnseekablesKind> permitted;
-        final AbstractKeysSerializer<RoutingKey, RoutingKeys> routingKeys;
-        final AbstractKeysSerializer<?, PartialKeyRoute> partialKeyRoute;
-        final AbstractKeysSerializer<?, FullKeyRoute> fullKeyRoute;
+        final AbstractSearchableKeysSerializer<RoutingKey, RoutingKeys> routingKeys;
+        final AbstractSearchableKeysSerializer<?, PartialKeyRoute> partialKeyRoute;
+        final AbstractSearchableKeysSerializer<?, FullKeyRoute> fullKeyRoute;
         final AbstractRangesSerializer<Ranges> ranges;
         final AbstractRangesSerializer<PartialRangeRoute> partialRangeRoute;
         final AbstractRangesSerializer<FullRangeRoute> fullRangeRoute;
 
         protected AbstractRoutablesSerializer(EnumSet<UnseekablesKind> permitted,
-                                              AbstractKeysSerializer<RoutingKey, RoutingKeys> routingKeys,
-                                              AbstractKeysSerializer<?, PartialKeyRoute> partialKeyRoute,
-                                              AbstractKeysSerializer<?, FullKeyRoute> fullKeyRoute,
+                                              AbstractSearchableKeysSerializer<RoutingKey, RoutingKeys> routingKeys,
+                                              AbstractSearchableKeysSerializer<?, PartialKeyRoute> partialKeyRoute,
+                                              AbstractSearchableKeysSerializer<?, FullKeyRoute> fullKeyRoute,
                                               AbstractRangesSerializer<Ranges> ranges,
                                               AbstractRangesSerializer<PartialRangeRoute> partialRangeRoute,
                                               AbstractRangesSerializer<FullRangeRoute> fullRangeRoute)
@@ -576,170 +574,311 @@ public class KeySerializers
 
     // this serializer is designed to permits using the collection in its serialized form with minimal in-memory state.
     // it also saves some memory by avoiding duplicating prefixes (which happens to also assist faster lookups)
-    public abstract static class AbstractSearchableKeysSerializer<K extends RoutableKey, KS extends AbstractKeys<K>> implements IVersionedSerializer<KS>
+    public abstract static class AbstractSearchableSerializer<K extends RoutableKey, R extends Routable, RS extends Routables<R>> implements IVersionedSerializer<RS>
     {
         final AccordSearchableKeySerializer<K> keySerializer;
-        final IntFunction<K[]> allocate;
+        final IntFunction<R[]> allocate;
 
-        public AbstractSearchableKeysSerializer(AccordSearchableKeySerializer<K> keySerializer, IntFunction<K[]> allocate)
+        public AbstractSearchableSerializer(AccordSearchableKeySerializer<K> keySerializer, IntFunction<R[]> allocate)
         {
             this.keySerializer = keySerializer;
             this.allocate = allocate;
         }
 
-        @Override
-        public void serialize(KS keys, DataOutputPlus out, int version) throws IOException
+        private int serializedSizeOfPrefix(Object prefix)
         {
-            int size = keys.size();
-            if (size == 0)
+            return keySerializer.serializedSizeOfPrefix(prefix);
+        }
+
+        private void serializePrefix(Object prefix, DataOutputPlus out, int version) throws IOException
+        {
+            keySerializer.serializePrefix(prefix, out, version);
+        }
+
+        private Object deserializePrefix(DataInputPlus in, int version) throws IOException
+        {
+            return keySerializer.deserializePrefix(in, version);
+        }
+
+        // if we store Ranges, we have twice as many indexes
+        abstract int recordCountToLengthCount(int recordCount);
+        abstract int fixedKeyLengthForPrefix(Object prefix);
+        abstract int serializedSizeWithoutPrefix(R routable);
+        abstract void serializeWithoutPrefixOrLength(R routable, DataOutputPlus out, int version) throws IOException;
+        abstract void serializeOffsets(RS unseekables, int start, int end, DataOutputPlus out) throws IOException;
+
+        abstract R deserializeWithPrefix(Object prefix, int length, DataInputPlus in, int version) throws IOException;
+        abstract R deserializeWithPrefix(Object prefix, int lengthIndex, int[] lengths, DataInputPlus in, int version) throws IOException;
+
+        abstract RS deserialize(DataInputPlus in, int version, R[] keys) throws IOException;
+
+        @Override
+        public long serializedSize(RS routables, int version)
+        {
+            int count = routables.size();
+            long size = TypeSizes.sizeofUnsignedVInt(count);
+            if (count == 0)
+                return size;
+
+            Object prefix = routables.get(0).prefix();
+            int prefixStart = 0;
+            for (int i = 1 ; i <= count ; ++i)
             {
-                out.writeUnsignedVInt32(0);
-                return;
+                Object nextPrefix = null;
+                if (i < count)
+                {
+                    nextPrefix = routables.get(i).prefix();
+                    if (Objects.equals(prefix, nextPrefix))
+                        continue;
+                }
+
+                size += TypeSizes.sizeofUnsignedVInt(count - i);
+                size += serializedSizeOfPrefix(prefix);
+                int fixedLength = fixedKeyLengthForPrefix(prefix);
+                if (fixedLength < 0)
+                    size += 4L * (i - prefixStart);
+                size += serializedSizeOfKeysWithoutPrefix(routables, prefixStart, i);
+                prefixStart = i;
+                prefix = nextPrefix;
             }
 
-            int prefixCount = 1;
-            Object prefix = keys.get(0).prefix();
-            Object[] prefixes = null;
-            int[] prefixEnds = null;
-            for (int i = 1 ; i < size ; ++i)
-            {
-                Object nextPrefix = keys.get(i).prefix();
-                if (Objects.equals(prefix, nextPrefix))
-                    continue;
+            return size;
+        }
 
-                if (prefixes == null)
+        @Override
+        public void serialize(RS keys, DataOutputPlus out, int version) throws IOException
+        {
+            int size = keys.size();
+            out.writeUnsignedVInt32(size);
+            if (size == 0)
+                return;
+
+            Object prefix = keys.get(0).prefix();
+            int prefixStart = 0;
+            for (int i = 1 ; i <= size ; ++i)
+            {
+                Object nextPrefix = null;
+                if (i < size)
                 {
-                    prefixes = cachedAny().get(2);
-                    prefixes[0] = prefix;
-                    prefixEnds = cachedInts().getInts(2);
-                    prefixEnds[0] = i;
+                    nextPrefix = keys.get(i).prefix();
+                    if (Objects.equals(prefix, nextPrefix))
+                        continue;
+                }
+
+                out.writeUnsignedVInt32(size - i);
+                serializePrefix(prefix, out, version);
+                int fixedLength = fixedKeyLengthForPrefix(prefix);
+                if (fixedLength < 0)
+                    serializeOffsets(keys, prefixStart, i, out);
+                serializeKeysWithoutPrefix(keys, prefixStart, i, out, version);
+                prefixStart = i;
+                prefix = nextPrefix;
+            }
+        }
+
+        private long serializedSizeOfKeysWithoutPrefix(RS keys, int start, int end)
+        {
+            long size = 0;
+            for (int i = start; i < end; ++i)
+                size += serializedSizeWithoutPrefix(keys.get(i));
+            return size;
+        }
+
+        private void serializeKeysWithoutPrefix(RS keys, int start, int end, DataOutputPlus out, int version) throws IOException
+        {
+            for (int i = start; i < end; ++i)
+                serializeWithoutPrefixOrLength(keys.get(i), out, version);
+        }
+
+        public void skip(DataInputPlus in, int version) throws IOException
+        {
+            int remaining = in.readUnsignedVInt32();
+            if (remaining == 0)
+                return;
+
+            while (remaining > 0)
+            {
+                int count = remaining - in.readUnsignedVInt32();
+                remaining -= count;
+                Object prefix = deserializePrefix(in, version);
+                int fixedLength = fixedKeyLengthForPrefix(prefix);
+                if (fixedLength >= 0)
+                {
+                    in.skipBytesFully(count * fixedLength);
                 }
                 else
                 {
-                    if (prefixes.length == prefixCount)
-                        prefixes = cachedAny().resize(prefixes, prefixCount, prefixCount * 2);
-                    if (prefixEnds.length == prefixCount)
-                        prefixEnds = cachedInts().resize(prefixEnds, prefixCount, prefixCount * 2);
-                    ++prefixCount;
+                    in.skipBytesFully(4 * (recordCountToLengthCount(count) - 1));
+                    int end = in.readInt();
+                    in.skipBytesFully(end);
                 }
             }
-
-            out.writeUnsignedVInt32(prefixCount);
-            if (prefixCount == 1)
-            {
-                out.writeUnsignedVInt32(size);
-                if (!keySerializer.keysWithSamePrefixAreFixedLength(keys.get(0)))
-                    serializeKeyWithoutPrefixOffsets(keys, 0, size, out, version);
-                serializeKeysWithoutPrefix(keys, 0, size, out, version);
-            }
-            else
-            {
-                for (int i = 0; i < prefixCount; ++i)
-                {
-                    out.writeUnsignedVInt32(prefixEnds[i]);
-                }
-                for (int i = 0; i < prefixCount; ++i)
-                {
-                    keySerializer.serializePrefix(prefixes[i], out, version);
-                }
-                int prefixStart = 0;
-                for (int i = 0 ; i < prefixCount ; ++i)
-                {
-                    int prefixEnd = prefixEnds[i];
-                    if (!keySerializer.keysWithSamePrefixAreFixedLength(keys.get(prefixStart)))
-                        serializeKeyWithoutPrefixOffsets(keys, prefixStart, prefixEnd, out, version);
-                    serializeKeysWithoutPrefix(keys, prefixStart, prefixEnd, out, version);
-                    prefixStart = prefixEnd;
-                }
-            }
-        }
-
-        private void serializeKeysWithoutPrefix(KS keys, int start, int end, DataOutputPlus out, int version) throws IOException
-        {
-            for (int i = start; i < end; ++i)
-                keySerializer.serializeWithoutPrefixOrLength(keys.get(i), out, version);
-        }
-
-        private void serializeKeyWithoutPrefixOffsets(KS keys, int start, int end, DataOutputPlus out, int version) throws IOException
-        {
-            int endOffset = 0;
-            for (int i = start; i < end; ++i)
-            {
-                endOffset += keySerializer.lengthWithoutPrefix(keys.get(i));
-                out.writeInt(endOffset);
-            }
-        }
-
-        abstract KS deserialize(DataInputPlus in, int version, K[] keys) throws IOException;
-
-        public void skip(DataInputPlus in, int version) throws IOException
-        {
-            int count = in.readUnsignedVInt32();
-            for (int i = 0; i < count ; i++)
-                keySerializer.deserialize(in, version);
-        }
-
-        @Override
-        public KS deserialize(DataInputPlus in, int version) throws IOException
-        {
-            K[] keys = allocate.apply(in.readUnsignedVInt32());
-            for (int i=0; i<keys.length; i++)
-                keys[i] = keySerializer.deserialize(in, version);
-            return deserialize(in, version, keys);
-        }
-
-        @Override
-        public long serializedSize(KS keys, int version)
-        {
-            long size = TypeSizes.sizeofUnsignedVInt(keys.size());
-            for (int i=0, mi=keys.size(); i<mi; i++)
-                size += keySerializer.serializedSize(keys.get(i), version);
-            return size;
-        }
-    }
-
-    public abstract static class AbstractRangesSerializer<RS extends AbstractRanges> implements IVersionedSerializer<RS>
-    {
-        private final IVersionedSerializer<Range> rangeSerializer;
-
-        public AbstractRangesSerializer(IVersionedSerializer<Range> rangeSerializer)
-        {
-            this.rangeSerializer = rangeSerializer;
-        }
-
-        @Override
-        public void serialize(RS ranges, DataOutputPlus out, int version) throws IOException
-        {
-            out.writeUnsignedVInt32(ranges.size());
-            for (int i=0, mi=ranges.size(); i<mi; i++)
-                rangeSerializer.serialize(ranges.get(i), out, version);
-        }
-
-        public void skip(DataInputPlus in, int version) throws IOException
-        {
-            int count = in.readUnsignedVInt32();
-            for (int i = 0; i < count ; i++)
-                rangeSerializer.deserialize(in, version);
         }
 
         @Override
         public RS deserialize(DataInputPlus in, int version) throws IOException
         {
-            Range[] ranges = new Range[in.readUnsignedVInt32()];
-            for (int i=0; i<ranges.length; i++)
-                ranges[i] = rangeSerializer.deserialize(in, version);
-            return deserialize(in, version, ranges);
+            int remaining = in.readUnsignedVInt32();
+            R[] out = allocate.apply(remaining);
+            int outCount = 0;
+            while (remaining > 0)
+            {
+                int count = remaining - in.readUnsignedVInt32();
+                remaining -= count;
+                Object prefix = deserializePrefix(in, version);
+                int fixedLength = fixedKeyLengthForPrefix(prefix);
+                if (fixedLength >= 0)
+                {
+                    for (int i = 0 ; i < count ; ++i)
+                        out[outCount++] = deserializeWithPrefix(prefix, fixedLength, in, version);
+                }
+                else
+                {
+                    int lengthCount = recordCountToLengthCount(count);
+                    if (lengthCount == 1)
+                    {
+                        int end = in.readInt();
+                        out[outCount++] = deserializeWithPrefix(prefix, end, in, version);
+                    }
+                    else
+                    {
+                        int[] lengths = cachedInts().getInts(lengthCount);
+                        int prev = 0;
+                        for (int i = 0 ; i < lengthCount ; ++i)
+                        {
+                            int end = in.readInt();
+                            lengths[i] = end - prev;
+                            prev = end;
+                        }
+                        for (int i = 0 ; i < count ; ++i)
+                            out[outCount++] = deserializeWithPrefix(prefix, i, lengths, in, version);
+                        cachedInts().forceDiscard(lengths);
+                    }
+                }
+            }
+
+            return deserialize(in, version, out);
+        }
+    }
+
+    // this serializer is designed to permits using the collection in its serialized form with minimal in-memory state.
+    // it also saves some memory by avoiding duplicating prefixes (which happens to also assist faster lookups)
+    public abstract static class AbstractSearchableKeysSerializer<K extends RoutableKey, KS extends AbstractKeys<K>> extends AbstractSearchableSerializer<K, K, KS> implements IVersionedSerializer<KS>
+    {
+        public AbstractSearchableKeysSerializer(AccordSearchableKeySerializer<K> keySerializer, IntFunction<K[]> allocate)
+        {
+            super(keySerializer, allocate);
         }
 
-        abstract RS deserialize(DataInputPlus in, int version, Range[] ranges) throws IOException;
+        @Override
+        final int fixedKeyLengthForPrefix(Object prefix)
+        {
+            return keySerializer.fixedKeyLengthForPrefix(prefix);
+        }
 
         @Override
-        public long serializedSize(RS ranges, int version)
+        final int recordCountToLengthCount(int recordCount)
         {
-            long size = TypeSizes.sizeofUnsignedVInt(ranges.size());
-            for (int i=0, mi=ranges.size(); i<mi; i++)
-                size += TokenRange.serializer.serializedSize((TokenRange) ranges.get(i), version);
-            return size;
+            return recordCount;
+        }
+
+        @Override
+        final int serializedSizeWithoutPrefix(K routable)
+        {
+            return keySerializer.serializedSizeWithoutPrefix(routable);
+        }
+
+        @Override
+        final void serializeWithoutPrefixOrLength(K routable, DataOutputPlus out, int version) throws IOException
+        {
+            keySerializer.serializeWithoutPrefixOrLength(routable, out, version);
+        }
+
+        @Override
+        final void serializeOffsets(KS keys, int startIndex, int endIndex, DataOutputPlus out) throws IOException
+        {
+            int endOffset = 0;
+            for (int i = startIndex; i < endIndex; ++i)
+            {
+                endOffset += serializedSizeWithoutPrefix(keys.get(i));
+                out.writeInt(endOffset);
+            }
+        }
+
+        @Override
+        final K deserializeWithPrefix(Object prefix, int length, DataInputPlus in, int version) throws IOException
+        {
+            return keySerializer.deserializeWithPrefix(prefix, length, in, version);
+        }
+
+        @Override
+        final K deserializeWithPrefix(Object prefix, int lengthIndex, int[] lengths, DataInputPlus in, int version) throws IOException
+        {
+            return keySerializer.deserializeWithPrefix(prefix, lengths[lengthIndex], in, version);
+        }
+    }
+
+    public abstract static class AbstractRangesSerializer<RS extends AbstractRanges> extends AbstractSearchableSerializer<RoutingKey, Range, RS> implements IVersionedSerializer<RS>
+    {
+        public AbstractRangesSerializer(AccordSearchableKeySerializer<RoutingKey> keySerializer)
+        {
+            super(keySerializer, Range[]::new);
+        }
+
+        @Override
+        int fixedKeyLengthForPrefix(Object prefix)
+        {
+            return keySerializer.fixedKeyLengthForPrefix(prefix) * 2;
+        }
+
+        @Override
+        int recordCountToLengthCount(int recordCount)
+        {
+            return recordCount * 2;
+        }
+
+        @Override
+        final int serializedSizeWithoutPrefix(Range range)
+        {
+            return keySerializer.serializedSizeWithoutPrefix(range.start())
+                   + keySerializer.serializedSizeWithoutPrefix(range.end());
+        }
+
+        @Override
+        final void serializeWithoutPrefixOrLength(Range key, DataOutputPlus out, int version) throws IOException
+        {
+            keySerializer.serializeWithoutPrefixOrLength(key.start(), out, version);
+            keySerializer.serializeWithoutPrefixOrLength(key.end(), out, version);
+        }
+
+        @Override
+        final void serializeOffsets(RS ranges, int startIndex, int endIndex, DataOutputPlus out) throws IOException
+        {
+            int endOffset = 0;
+            for (int i = startIndex; i < endIndex; ++i)
+            {
+                Range r = ranges.get(i);
+                endOffset += keySerializer.serializedSizeWithoutPrefix(r.start());
+                out.writeInt(endOffset);
+                endOffset += keySerializer.serializedSizeWithoutPrefix(r.end());
+                out.writeInt(endOffset);
+            }
+        }
+
+        @Override
+        final Range deserializeWithPrefix(Object prefix, int length, DataInputPlus in, int version) throws IOException
+        {
+            RoutingKey start = keySerializer.deserializeWithPrefix(prefix, length/2, in, version);
+            RoutingKey end = keySerializer.deserializeWithPrefix(prefix, length/2, in, version);
+            return TokenRange.create((TokenKey) start, (TokenKey) end);
+        }
+
+        @Override
+        final Range deserializeWithPrefix(Object prefix, int lengthIndex, int[] lengths, DataInputPlus in, int version) throws IOException
+        {
+            RoutingKey start = keySerializer.deserializeWithPrefix(prefix, lengths[lengthIndex * 2], in, version);
+            RoutingKey end = keySerializer.deserializeWithPrefix(prefix, lengths[lengthIndex * 2 + 1], in, version);
+            return TokenRange.create((TokenKey) start, (TokenKey) end);
         }
     }
 
@@ -749,8 +888,8 @@ public class KeySerializers
         TreeMap<ByteBuffer, ByteBuffer> result = new TreeMap<>();
         for (Range range : ranges)
         {
-            result.put(TokenKey.serializer.toBytes((TokenKey) range.start()),
-                       TokenKey.serializer.toBytes((TokenKey) range.end()));
+            result.put(TokenKey.serializer.serialize((TokenKey) range.start()),
+                       TokenKey.serializer.serialize((TokenKey) range.end()));
         }
         return result;
     }
@@ -761,8 +900,8 @@ public class KeySerializers
         Range[] ranges = new Range[blobMap.size()];
         for (Map.Entry<ByteBuffer, ByteBuffer> e : blobMap.entrySet())
         {
-            ranges[i++] = TokenRange.create(TokenKey.serializer.fromBytes(e.getKey(), getPartitioner()),
-                                            TokenKey.serializer.fromBytes(e.getValue(), getPartitioner()));
+            ranges[i++] = TokenRange.create(TokenKey.serializer.deserialize(e.getKey()),
+                                            TokenKey.serializer.deserialize(e.getValue()));
         }
         return Ranges.of(ranges);
     }
