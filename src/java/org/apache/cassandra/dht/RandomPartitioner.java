@@ -453,7 +453,7 @@ public class RandomPartitioner implements IPartitioner
         return new BigIntegerToken(new BigInteger(bytes));
     }
 
-    private static byte[] increment(byte[] bytes)
+    public static byte[] increment(byte[] bytes)
     {
         int i = bytes.length;
         while (--i >= 0 && ++bytes[i] == 0);
@@ -465,7 +465,7 @@ public class RandomPartitioner implements IPartitioner
         return bytes;
     }
 
-    private static void decrement(byte[] bytes)
+    public static void decrement(byte[] bytes)
     {
         for (int i = bytes.length - 1 ; i >= 0 && bytes[i]-- == 0 ; --i);
     }
