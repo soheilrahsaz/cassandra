@@ -24,6 +24,7 @@ import java.util.Arrays;
 import org.junit.Test;
 
 import org.apache.cassandra.cql3.functions.types.utils.Bytes;
+import org.apache.cassandra.harry.checker.TestHelper;
 import org.apache.cassandra.harry.gen.EntropySource;
 import org.apache.cassandra.harry.gen.rng.JdkRandomEntropySource;
 
@@ -64,51 +65,53 @@ public class RandomPartitionerTest extends PartitionerTestCase
     @Test
     public void testIncrement()
     {
-        EntropySource rng = new JdkRandomEntropySource(1l);
-        for (int i = 0; i < 10_000; i++)
-        {
-            BigInteger bi = BigInteger.valueOf(Math.abs(rng.next()));
-            byte[] bytes = bi.toByteArray();
-            byte[] copy = Arrays.copyOf(bytes, bytes.length);
-
-            BigInteger incremented = new BigInteger(RandomPartitioner.increment(bytes));
-            BigInteger expected = bi.add(BigInteger.valueOf(1));
-            if (!expected.equals(incremented))
+        TestHelper.withRandom((rng) -> {
+            for (int i = 0; i < 10_000; i++)
             {
-                throw new IllegalArgumentException(String.format("\nBefore increment: %s" +
-                                                                 "\n After increment: %s," +
-                                                                 "\n%s != %s",
-                                                                 Bytes.toHexString(copy),
-                                                                 Bytes.toHexString(bytes),
-                                                                 expected,
-                                                                 incremented));
+                BigInteger bi = BigInteger.valueOf(Math.abs(rng.next()));
+                byte[] bytes = bi.toByteArray();
+                byte[] copy = Arrays.copyOf(bytes, bytes.length);
+
+                BigInteger incremented = new BigInteger(RandomPartitioner.increment(bytes));
+                BigInteger expected = bi.add(BigInteger.valueOf(1));
+                if (!expected.equals(incremented))
+                {
+                    throw new IllegalArgumentException(String.format("\nBefore increment: %s" +
+                                                                     "\n After increment: %s," +
+                                                                     "\n%s != %s",
+                                                                     Bytes.toHexString(copy),
+                                                                     Bytes.toHexString(bytes),
+                                                                     expected,
+                                                                     incremented));
+                }
             }
-        }
+        });
     }
 
     @Test
     public void testDecrement()
     {
-        EntropySource rng = new JdkRandomEntropySource(1l);
-        for (int i = 0; i < 10_000; i++)
-        {
-            BigInteger bi = BigInteger.valueOf(Math.abs(rng.next() + 1));
-            byte[] bytes = bi.toByteArray();
-            byte[] copy = Arrays.copyOf(bytes, bytes.length);
-
-            RandomPartitioner.decrement(bytes);
-            BigInteger incremented = new BigInteger(bytes);
-            BigInteger expected = bi.add(BigInteger.valueOf(-1));
-            if (!expected.equals(incremented))
+        TestHelper.withRandom((rng) -> {
+            for (int i = 0; i < 10_000; i++)
             {
-                throw new IllegalArgumentException(String.format("\nBefore increment: %s" +
-                                                                 "\n After increment: %s," +
-                                                                 "\n%s != %s",
-                                                                 Bytes.toHexString(copy),
-                                                                 Bytes.toHexString(bytes),
-                                                                 expected,
-                                                                 incremented));
+                BigInteger bi = BigInteger.valueOf(Math.abs(rng.next() + 1));
+                byte[] bytes = bi.toByteArray();
+                byte[] copy = Arrays.copyOf(bytes, bytes.length);
+
+                RandomPartitioner.decrement(bytes);
+                BigInteger incremented = new BigInteger(bytes);
+                BigInteger expected = bi.add(BigInteger.valueOf(-1));
+                if (!expected.equals(incremented))
+                {
+                    throw new IllegalArgumentException(String.format("\nBefore increment: %s" +
+                                                                     "\n After increment: %s," +
+                                                                     "\n%s != %s",
+                                                                     Bytes.toHexString(copy),
+                                                                     Bytes.toHexString(bytes),
+                                                                     expected,
+                                                                     incremented));
+                }
             }
-        }
+        });
     }
 }
